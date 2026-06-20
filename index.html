@@ -443,20 +443,32 @@
       word-break: break-word;
     }
 
-    /* Центральная рамка, чтобы человек понимал куда держать QR */
-    .scan-frame {
-      position: absolute;
+  /* 
+ * Визуальная рамка сканирования.
+ * Она не влияет на сам scanner,
+ * а только показывает ученику, куда примерно держать QR.
+ */
+.scan-frame {
+  position: fixed;
 
-      width: 310px;
-      height: 310px;
+  /* Ставим рамку строго по центру экрана */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 
-      border: 3px solid rgba(255,255,255,0.22);
-      border-radius: 20px;
+  width: 310px;
+  height: 310px;
 
-      box-shadow: 0 0 35px rgba(33,150,243,0.25);
+  border: 3px solid rgba(255,255,255,0.28);
+  border-radius: 22px;
 
-      z-index: 5;
-    }
+  box-shadow: 0 0 40px rgba(33,150,243,0.35);
+
+  z-index: 5;
+
+  /* Чтобы рамка не мешала нажатию на экран */
+  pointer-events: none;
+}
 
     /* Маленькая подсказка про звук */
     #soundHint {
@@ -492,6 +504,7 @@
         font-size: 22px;
       }
 
+    /* В горизонтальном режиме рамка меньше, но всё равно по центру */
       .scan-frame {
         width: 260px;
         height: 260px;
