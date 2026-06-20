@@ -2,13 +2,10 @@
 <html>
 <head>
   <meta charset="UTF-8">
-
-  <!-- Нормальный размер на телефоне/планшете -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>AXIS Check-In Scanner</title>
 
-  <!-- Боевой QR scanner -->
+  <!-- Nimiq QR Scanner -->
   <script type="module">
     import QrScanner from "https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js";
 
@@ -16,8 +13,8 @@
     const WEB_APP_URL =
       "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZINd5x2tX6DD6iv6AtDOwcxSDgmYHq0jjjKytEDLOxBfGezJiKw/exec";
 
-    // Чтобы один QR не сработал 10 раз подряд
     let alreadyScanned = false;
+    let scanner = null;
 
     window.addEventListener("DOMContentLoaded", async function () {
 
@@ -25,70 +22,79 @@
       const status = document.getElementById("status");
       const debug = document.getElementById("debug");
 
- // Проверяем, доступна ли камера
-const hasCamera = await QrScanner.hasCamera();
-
-if (!hasCamera) {
-  status.innerText = "Kamera konnte nicht gestartet werden";
-  debug.innerText = "Camera not found";
-  return;
-}
-
-      // Создаём scanner
-      const scanner = new QrScanner(
-        video,
-        result => {
-
-          if (alreadyScanned) return;
-          alreadyScanned = true;
-
-          const scannedText = result.data || result;
-
-          debug.innerText = "QR erkannt";
-
-          // Из QR ссылки достаём id=AJJ001
-          const match = scannedText.match(/[?&]id=([^&]+)/);
-
-          if (!match) {
-            status.innerText = "QR ohne MemberID";
-            alreadyScanned = false;
-            return;
-          }
-
-          const memberId = decodeURIComponent(match[1]);
-
-          status.innerText = "Check-In läuft...";
-
-          // Открываем Apps Script check-in
-          window.location.href =
-            WEB_APP_URL +
-            "?id=" +
-            encodeURIComponent(memberId) +
-            "&scanner=1";
-        },
-        {
-          // Важно: использовать заднюю камеру
-          preferredCamera: "environment",
-
-          // Подсветка области сканирования
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-
-          // Чаще анализировать кадры
-          maxScansPerSecond: 25,
-
-          // Не инвертировать, у нас обычный чёрный QR на белом фоне
-          returnDetailedScanResult: true
-        }
-      );
-
       try {
+
+        // Проверяем камеры
+        const cameras = await QrScanner.listCameras(true);
+
+        if (!cameras || cameras.length === 0) {
+          status.innerText = "Kamera konnte nicht gestartet werden";
+          debug.innerText = "Camera not found";
+          return;
+        }
+
+        // По возможности выбираем заднюю камеру
+        let selectedCamera = cameras.find(cam =>
+          cam.label.toLowerCase().includes("back") ||
+          cam.label.toLowerCase().includes("rear") ||
+          cam.label.toLowerCase().includes("environment")
+        );
+
+        // Если заднюю не нашли — берём первую доступную
+        if (!selectedCamera) {
+          selectedCamera = cameras[0];
+        }
+
+        scanner = new QrScanner(
+          video,
+          result => {
+
+            if (alreadyScanned) return;
+            alreadyScanned = true;
+
+            const scannedText = result.data || result;
+
+            // Достаём id=AJJ001 из QR ссылки
+            const match = scannedText.match(/[?&]id=([^&]+)/);
+
+            if (!match) {
+              status.innerText = "Ungültiger QR Code";
+              debug.innerText = scannedText;
+              alreadyScanned = false;
+              return;
+            }
+
+            const memberId = decodeURIComponent(match[1]);
+
+            status.innerText = "Check-In läuft...";
+            debug.innerText = memberId;
+
+            // Открываем Apps Script check-in
+            window.location.href =
+              WEB_APP_URL +
+              "?id=" +
+              encodeURIComponent(memberId) +
+              "&scanner=1";
+          },
+          {
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+            maxScansPerSecond: 25,
+            returnDetailedScanResult: true
+          }
+        );
+
+        // Запускаем выбранную камеру
+        await scanner.setCamera(selectedCamera.id);
         await scanner.start();
+
         status.innerText = "Ready for Check-In";
         debug.innerText = "Kamera aktiv";
+
       } catch (err) {
+
         status.innerText = "Kamera konnte nicht gestartet werden";
-        debug.innerText = err;
+        debug.innerText = String(err);
       }
     });
   </script>
@@ -141,16 +147,16 @@ if (!hasCamera) {
     #debug {
       font-size: 18px;
       color: #999;
+      max-width: 90%;
+      word-break: break-word;
     }
   </style>
 </head>
 
 <body>
 
-  <!-- Камера работает, но почти не видна -->
   <video id="camera" muted playsinline></video>
 
-  <!-- Видимый экран ожидания -->
   <div class="screen">
     <div class="title">AXIS JIU-JITSU</div>
     <div id="status">Kamera startet...</div>
