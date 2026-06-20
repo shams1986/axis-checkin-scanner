@@ -1,120 +1,158 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="UTF-8">
 
-  <!-- Чтобы страница нормально выглядела на телефоне/планшете -->
+  <!-- Нормальный размер на телефоне/планшете -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>AXIS Check-In Scanner</title>
 
-  <!-- QR Scanner библиотека -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Боевой QR scanner -->
+  <script type="module">
+    import QrScanner from "https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js";
+
+    // Apps Script Web App URL
+    const WEB_APP_URL =
+      "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZINd5x2tX6DD6iv6AtDOwcxSDgmYHq0jjjKytEDLOxBfGezJiKw/exec";
+
+    // Чтобы один QR не сработал 10 раз подряд
+    let alreadyScanned = false;
+
+    window.addEventListener("DOMContentLoaded", async function () {
+
+      const video = document.getElementById("camera");
+      const status = document.getElementById("status");
+      const debug = document.getElementById("debug");
+
+      // Проверяем, доступна ли камера
+      if (!QrScanner.hasCamera()) {
+        status.innerText = "Keine Kamera gefunden";
+        return;
+      }
+
+      // Создаём scanner
+      const scanner = new QrScanner(
+        video,
+        result => {
+
+          if (alreadyScanned) return;
+          alreadyScanned = true;
+
+          const scannedText = result.data || result;
+
+          debug.innerText = "QR erkannt";
+
+          // Из QR ссылки достаём id=AJJ001
+          const match = scannedText.match(/[?&]id=([^&]+)/);
+
+          if (!match) {
+            status.innerText = "QR ohne MemberID";
+            alreadyScanned = false;
+            return;
+          }
+
+          const memberId = decodeURIComponent(match[1]);
+
+          status.innerText = "Check-In läuft...";
+
+          // Открываем Apps Script check-in
+          window.location.href =
+            WEB_APP_URL +
+            "?id=" +
+            encodeURIComponent(memberId) +
+            "&scanner=1";
+        },
+        {
+          // Важно: использовать заднюю камеру
+          preferredCamera: "environment",
+
+          // Подсветка области сканирования
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+
+          // Чаще анализировать кадры
+          maxScansPerSecond: 25,
+
+          // Не инвертировать, у нас обычный чёрный QR на белом фоне
+          returnDetailedScanResult: true
+        }
+      );
+
+      try {
+        await scanner.start();
+        status.innerText = "Ready for Check-In";
+        debug.innerText = "Kamera aktiv";
+      } catch (err) {
+        status.innerText = "Kamera konnte nicht gestartet werden";
+        debug.innerText = err;
+      }
+    });
+  </script>
 
   <style>
     body {
       margin: 0;
       padding: 0;
-      background: #111;
+      background: #050505;
       color: white;
       font-family: Arial, sans-serif;
       text-align: center;
+      overflow: hidden;
     }
 
-    h1 {
-      margin-top: 20px;
-      font-size: 40px;
+    #camera {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      opacity: 0.08;
+      z-index: 1;
     }
 
-    .status {
+    .screen {
+      position: relative;
+      z-index: 10;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .title {
+      font-size: 48px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      margin-bottom: 30px;
+    }
+
+    #status {
+      font-size: 32px;
       color: #4CAF50;
-      font-size: 24px;
       margin-bottom: 15px;
     }
 
-    /* Камера сейчас видимая — это тестовый режим */
-    #reader {
-      width: 640px;
-      max-width: 95%;
-      margin: auto;
-      background: #000;
-    }
-
-    #result {
-      margin-top: 20px;
+    #debug {
       font-size: 18px;
-      color: #ddd;
-      word-break: break-all;
-      padding: 10px;
+      color: #999;
     }
   </style>
 </head>
 
 <body>
 
-  <h1>AXIS JIU-JITSU</h1>
+  <!-- Камера работает, но почти не видна -->
+  <video id="camera" muted playsinline></video>
 
-  <div class="status">
-    Scanner Test Mode
+  <!-- Видимый экран ожидания -->
+  <div class="screen">
+    <div class="title">AXIS JIU-JITSU</div>
+    <div id="status">Kamera startet...</div>
+    <div id="debug">Bitte warten</div>
   </div>
-
-  <!-- Здесь показывается камера -->
-  <div id="reader"></div>
-
-  <!-- Здесь покажем результат сканирования -->
-  <div id="result">
-    QR Code vor die Kamera halten
-  </div>
-
-  <script>
-
-    // Защита от многократного срабатывания
-    let alreadyScanned = false;
-
-    // Эта функция срабатывает, когда QR успешно прочитан
-    function onScanSuccess(decodedText) {
-
-      if (alreadyScanned) {
-        return;
-      }
-
-      alreadyScanned = true;
-
-      document.getElementById("result").innerText =
-        "QR erkannt: " + decodedText;
-
-      alert("QR erkannt: " + decodedText);
-    }
-
-    // Эта функция получает ошибки сканирования.
-    // Мы их не показываем постоянно, потому что камера даёт много мелких ошибок.
-    function onScanFailure(error) {
-      // Пока ничего не делаем
-    }
-
-    // Настройки сканера
-    const config = {
-      fps: 15,
-      qrbox: {
-        width: 320,
-        height: 320
-      },
-      rememberLastUsedCamera: true
-    };
-
-    // Создаём сканер с готовым UI
-    const scanner = new Html5QrcodeScanner(
-      "reader",
-      config,
-      false
-    );
-
-    // Запускаем сканер
-    scanner.render(onScanSuccess, onScanFailure);
-
-  </script>
 
 </body>
-
 </html>
