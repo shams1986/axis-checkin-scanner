@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>AXIS Check-In Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+
+    body {
+
+      margin: 0;
+      padding: 0;
+
+      background: #111;
+      color: white;
+
+      font-family: Arial, sans-serif;
+
+      text-align: center;
+    }
+
+    /* Заголовок */
+    h1 {
+
+      margin-top: 20px;
+
+      font-size: 42px;
+    }
+
+    /* Текст статуса */
+    .status {
+
+      color: #4CAF50;
+
+      font-size: 28px;
+
+      margin-bottom: 20px;
+    }
+
+    /* Окно камеры */
+    #reader {
+
+      width: 500px;
+
+      max-width: 95%;
+
+      margin: auto;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <h1>
+    AXIS JIU-JITSU
+  </h1>
+
+  <div class="status">
+    Ready for Check-In
+  </div>
+
+  <div id="reader"></div>
+
+  <script>
+
+    function onScanSuccess(decodedText) {
+
+      alert("QR erkannt: " + decodedText);
+
+    }
+
+    const html5QrCode =
+      new Html5Qrcode("reader");
+
+    html5QrCode.start(
+      {
+        facingMode: "environment"
+      },
+      {
+        fps: 10,
+        qrbox: 250
+      },
+      onScanSuccess
+    );
+
+  </script>
+
+</body>
+
+</html>
