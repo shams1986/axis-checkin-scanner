@@ -2,96 +2,116 @@
 <html>
 
 <head>
-
   <meta charset="UTF-8">
 
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
+  <!-- Чтобы страница нормально выглядела на телефоне/планшете -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>AXIS Check-In Scanner</title>
 
+  <!-- QR Scanner библиотека -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-
     body {
-
       margin: 0;
       padding: 0;
-
       background: #111;
       color: white;
-
       font-family: Arial, sans-serif;
-
       text-align: center;
     }
 
-    /* Заголовок */
     h1 {
-
       margin-top: 20px;
-
-      font-size: 42px;
+      font-size: 40px;
     }
 
-    /* Текст статуса */
     .status {
-
       color: #4CAF50;
-
-      font-size: 28px;
-
-      margin-bottom: 20px;
+      font-size: 24px;
+      margin-bottom: 15px;
     }
 
-    /* Окно камеры */
+    /* Камера сейчас видимая — это тестовый режим */
     #reader {
-
-      width: 500px;
-
+      width: 640px;
       max-width: 95%;
-
       margin: auto;
+      background: #000;
     }
 
+    #result {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #ddd;
+      word-break: break-all;
+      padding: 10px;
+    }
   </style>
-
 </head>
 
 <body>
 
-  <h1>
-    AXIS JIU-JITSU
-  </h1>
+  <h1>AXIS JIU-JITSU</h1>
 
   <div class="status">
-    Ready for Check-In
+    Scanner Test Mode
   </div>
 
+  <!-- Здесь показывается камера -->
   <div id="reader"></div>
+
+  <!-- Здесь покажем результат сканирования -->
+  <div id="result">
+    QR Code vor die Kamera halten
+  </div>
 
   <script>
 
+    // Защита от многократного срабатывания
+    let alreadyScanned = false;
+
+    // Эта функция срабатывает, когда QR успешно прочитан
     function onScanSuccess(decodedText) {
 
-      alert("QR erkannt: " + decodedText);
+      if (alreadyScanned) {
+        return;
+      }
 
+      alreadyScanned = true;
+
+      document.getElementById("result").innerText =
+        "QR erkannt: " + decodedText;
+
+      alert("QR erkannt: " + decodedText);
     }
 
-    const html5QrCode =
-      new Html5Qrcode("reader");
+    // Эта функция получает ошибки сканирования.
+    // Мы их не показываем постоянно, потому что камера даёт много мелких ошибок.
+    function onScanFailure(error) {
+      // Пока ничего не делаем
+    }
 
-    html5QrCode.start(
-      {
-        facingMode: "environment"
+    // Настройки сканера
+    const config = {
+      fps: 15,
+      qrbox: {
+        width: 320,
+        height: 320
       },
-      {
-        fps: 10,
-        qrbox: 250
-      },
-      onScanSuccess
+      rememberLastUsedCamera: true
+    };
+
+    // Создаём сканер с готовым UI
+    const scanner = new Html5QrcodeScanner(
+      "reader",
+      config,
+      false
     );
+
+    // Запускаем сканер
+    scanner.render(onScanSuccess, onScanFailure);
 
   </script>
 
