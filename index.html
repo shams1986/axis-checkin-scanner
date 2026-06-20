@@ -25,11 +25,14 @@
       const status = document.getElementById("status");
       const debug = document.getElementById("debug");
 
-      // Проверяем, доступна ли камера
-      if (!QrScanner.hasCamera()) {
-        status.innerText = "Keine Kamera gefunden";
-        return;
-      }
+ // Проверяем, доступна ли камера
+const hasCamera = await QrScanner.hasCamera();
+
+if (!hasCamera) {
+  status.innerText = "Kamera konnte nicht gestartet werden";
+  debug.innerText = "Camera not found";
+  return;
+}
 
       // Создаём scanner
       const scanner = new QrScanner(
