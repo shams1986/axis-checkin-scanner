@@ -65,47 +65,78 @@
     }
 
 
-    /**
-     * playSound(type)
-     *
-     * Играет разные звуки:
-     * success   = успешный check-in
-     * duplicate = уже отмечен
-     * error     = ошибка
-     */
-    function playSound(type) {
+   /**
+ * playTone(frequency, startTime, duration, volume)
+ *
+ * Проигрывает один короткий тон.
+ *
+ * frequency = высота звука
+ * startTime = когда начать
+ * duration  = сколько длится
+ * volume    = громкость
+ */
+function playTone(frequency, startTime, duration, volume) {
 
-      try {
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
 
-        if (!audioContext) {
-          return;
-        }
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
 
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.value = frequency;
 
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
+  gain.gain.setValueAtTime(0.001, startTime);
+  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-        if (type === "success") {
-          oscillator.frequency.value = 880;
-        } else if (type === "duplicate") {
-          oscillator.frequency.value = 520;
-        } else {
-          oscillator.frequency.value = 220;
-        }
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.03);
+}
 
-        gain.gain.setValueAtTime(0.001, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.25, audioContext.currentTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.25);
 
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.28);
+/**
+ * playSound(type)
+ *
+ * Играет разные звуки:
+ *
+ * success   = красивый короткий положительный звук
+ * duplicate = предупреждение, что ученик уже отмечен
+ * error     = ошибка
+ */
+function playSound(type) {
 
-      } catch (err) {
-        // Если браузер заблокировал звук — не ломаем check-in
-      }
+  try {
+
+    if (!audioContext) {
+      return;
     }
+
+    const now = audioContext.currentTime;
+
+    if (type === "success") {
+
+      // Успешный check-in: приятный восходящий звук
+      playTone(660, now, 0.18, 0.45);
+      playTone(880, now + 0.14, 0.18, 0.45);
+      playTone(1175, now + 0.28, 0.22, 0.38);
+
+    } else if (type === "duplicate") {
+
+      // Повторный check-in: два мягких предупреждающих сигнала
+      playTone(420, now, 0.18, 0.42);
+      playTone(420, now + 0.25, 0.18, 0.42);
+
+    } else {
+
+      // Ошибка: низкий короткий сигнал
+      playTone(220, now, 0.35, 0.45);
+    }
+
+  } catch (err) {
+    // Если браузер заблокировал звук — check-in всё равно работает
+  }
+}
 
 
     /**
