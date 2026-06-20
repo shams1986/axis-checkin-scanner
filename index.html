@@ -2,165 +2,536 @@
 <html>
 <head>
   <meta charset="UTF-8">
+
+  <!-- Нормальный размер на телефоне и планшете -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>AXIS Check-In Scanner</title>
 
   <!-- Nimiq QR Scanner -->
   <script type="module">
+
     import QrScanner from "https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js";
+
+    // Worker для QR Scanner
+    QrScanner.WORKER_PATH =
+      "https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner-worker.min.js";
 
     // Apps Script Web App URL
     const WEB_APP_URL =
       "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZINd5x2tX6DD6iv6AtDOwcxSDgmYHq0jjjKytEDLOxBfGezJiKw/exec";
 
-    let alreadyScanned = false;
-    let scanner = null;
+    // Через сколько секунд вернуться к Ready экрану
+    const RESET_DELAY_MS = 4500;
 
-    window.addEventListener("DOMContentLoaded", async function () {
+    // Защита от повторного срабатывания одного QR
+    let scanLocked = false;
 
-      const video = document.getElementById("camera");
-      const status = document.getElementById("status");
-      const debug = document.getElementById("debug");
+    // AudioContext для звуков
+    let audioContext = null;
+
+    // HTML элементы
+    let video;
+    let title;
+    let nameBox;
+    let subtitle;
+    let debug;
+    let soundHint;
+
+
+    /**
+     * unlockSound()
+     *
+     * Мобильные браузеры часто блокируют звук,
+     * пока пользователь один раз не нажмёт на экран.
+     */
+    function unlockSound() {
 
       try {
 
-        // Проверяем камеры
-        const cameras = await QrScanner.listCameras(true);
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
 
-        if (!cameras || cameras.length === 0) {
-          status.innerText = "Kamera konnte nicht gestartet werden";
-          debug.innerText = "Camera not found";
+        audioContext.resume();
+
+        if (soundHint) {
+          soundHint.style.display = "none";
+        }
+
+      } catch (err) {
+        // Если звук не активировался — просто продолжаем без ошибки
+      }
+    }
+
+
+    /**
+     * playSound(type)
+     *
+     * Играет разные звуки:
+     * success   = успешный check-in
+     * duplicate = уже отмечен
+     * error     = ошибка
+     */
+    function playSound(type) {
+
+      try {
+
+        if (!audioContext) {
           return;
         }
 
-        // По возможности выбираем заднюю камеру
-        let selectedCamera = cameras.find(cam =>
-          cam.label.toLowerCase().includes("back") ||
-          cam.label.toLowerCase().includes("rear") ||
-          cam.label.toLowerCase().includes("environment")
-        );
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
 
-        // Если заднюю не нашли — берём первую доступную
-        if (!selectedCamera) {
-          selectedCamera = cameras[0];
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+
+        if (type === "success") {
+          oscillator.frequency.value = 880;
+        } else if (type === "duplicate") {
+          oscillator.frequency.value = 520;
+        } else {
+          oscillator.frequency.value = 220;
         }
 
-        scanner = new QrScanner(
+        gain.gain.setValueAtTime(0.001, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.25, audioContext.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.25);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.28);
+
+      } catch (err) {
+        // Если браузер заблокировал звук — не ломаем check-in
+      }
+    }
+
+
+    /**
+     * vibrate(type)
+     *
+     * Лёгкая вибрация на телефоне,
+     * если браузер это поддерживает.
+     */
+    function vibrate(type) {
+
+      if (!navigator.vibrate) {
+        return;
+      }
+
+      if (type === "success") {
+        navigator.vibrate(80);
+      } else if (type === "duplicate") {
+        navigator.vibrate([60, 60, 60]);
+      } else {
+        navigator.vibrate(200);
+      }
+    }
+
+
+    /**
+     * setReadyScreen()
+     *
+     * Возвращает экран в режим ожидания.
+     */
+    function setReadyScreen() {
+
+      title.innerText = "Ready for Check-In";
+      title.style.color = "#4CAF50";
+
+      nameBox.innerText = "";
+      subtitle.innerText = "QR Code vor die Kamera halten";
+      debug.innerText = "Kamera aktiv";
+    }
+
+
+    /**
+     * showResult(data)
+     *
+     * Показывает результат check-in,
+     * который пришёл из Apps Script API.
+     */
+    function showResult(data) {
+
+      title.innerText = data.title || "Check-In";
+      title.style.color = data.color || "#4CAF50";
+
+      nameBox.innerText = data.vorname || "";
+      subtitle.innerText = data.subtitle || "";
+      debug.innerText = data.memberId || "";
+
+      playSound(data.sound);
+      vibrate(data.sound);
+
+      setTimeout(function () {
+        scanLocked = false;
+        setReadyScreen();
+      }, RESET_DELAY_MS);
+    }
+
+
+    /**
+     * extractMemberId(scannedText)
+     *
+     * Достаёт MemberID из QR-кода.
+     *
+     * Ожидаемый QR:
+     * .../exec?id=AJJ010
+     */
+    function extractMemberId(scannedText) {
+
+      const text = String(scannedText).trim();
+
+      try {
+
+        const url = new URL(text);
+        const id = url.searchParams.get("id");
+
+        if (id) {
+          return id;
+        }
+
+      } catch (err) {
+        // Если это не URL — пробуем regex ниже
+      }
+
+      const match = text.match(/[?&]id=([^&]+)/);
+
+      if (match) {
+        return decodeURIComponent(match[1]);
+      }
+
+      // Запасной вариант, если когда-нибудь QR будет содержать только AJJ010
+      if (/^AJJ[0-9]+$/i.test(text)) {
+        return text;
+      }
+
+      return null;
+    }
+
+
+    /**
+     * callCheckinApi(memberId)
+     *
+     * Отправляет MemberID в Apps Script API
+     * без перехода на script.google.com.
+     *
+     * GitHub scanner остаётся открытым,
+     * камера не выключается.
+     */
+    function callCheckinApi(memberId) {
+
+      const callbackName =
+        "axisCheckinCallback_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+
+      const script = document.createElement("script");
+
+      window[callbackName] = function (data) {
+
+        // Удаляем временный script и callback
+        delete window[callbackName];
+        script.remove();
+
+        // Показываем результат на scanner page
+        showResult(data);
+      };
+
+      script.onerror = function () {
+
+        delete window[callbackName];
+        script.remove();
+
+        showResult({
+          result: "error",
+          memberId: memberId,
+          vorname: "",
+          title: "❌ Verbindung Fehler",
+          subtitle: "Bitte erneut versuchen.",
+          color: "#F44336",
+          sound: "error"
+        });
+      };
+
+      script.src =
+        WEB_APP_URL +
+        "?api=checkin" +
+        "&id=" + encodeURIComponent(memberId) +
+        "&callback=" + encodeURIComponent(callbackName) +
+        "&t=" + Date.now();
+
+      document.body.appendChild(script);
+    }
+
+
+    /**
+     * onScanSuccess(result)
+     *
+     * Запускается, когда камера прочитала QR.
+     */
+    function onScanSuccess(result) {
+
+      if (scanLocked) {
+        return;
+      }
+
+      scanLocked = true;
+
+      const scannedText = result.data || result;
+      const memberId = extractMemberId(scannedText);
+
+      if (!memberId) {
+
+        showResult({
+          result: "invalid",
+          memberId: "",
+          vorname: "",
+          title: "❌ Ungültiger QR Code",
+          subtitle: "Bitte Trainer informieren.",
+          color: "#F44336",
+          sound: "error"
+        });
+
+        return;
+      }
+
+      title.innerText = "Check-In läuft...";
+      title.style.color = "#2196F3";
+      nameBox.innerText = "";
+      subtitle.innerText = "Bitte kurz warten.";
+      debug.innerText = memberId;
+
+      callCheckinApi(memberId);
+    }
+
+
+    /**
+     * startScanner()
+     *
+     * Запускает камеру и QR Scanner.
+     */
+    async function startScanner() {
+
+      video = document.getElementById("camera");
+      title = document.getElementById("title");
+      nameBox = document.getElementById("name");
+      subtitle = document.getElementById("subtitle");
+      debug = document.getElementById("debug");
+      soundHint = document.getElementById("soundHint");
+
+      try {
+
+        const scanner = new QrScanner(
           video,
-          result => {
-
-            if (alreadyScanned) return;
-            alreadyScanned = true;
-
-            const scannedText = result.data || result;
-
-            // Достаём id=AJJ001 из QR ссылки
-            const match = scannedText.match(/[?&]id=([^&]+)/);
-
-            if (!match) {
-              status.innerText = "Ungültiger QR Code";
-              debug.innerText = scannedText;
-              alreadyScanned = false;
-              return;
-            }
-
-            const memberId = decodeURIComponent(match[1]);
-
-            status.innerText = "Check-In läuft...";
-            debug.innerText = memberId;
-
-            // Открываем Apps Script check-in
-            window.location.href =
-              WEB_APP_URL +
-              "?id=" +
-              encodeURIComponent(memberId) +
-              "&scanner=1";
-          },
+          onScanSuccess,
           {
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
-            maxScansPerSecond: 25,
+            preferredCamera: "environment",
+            maxScansPerSecond: 30,
             returnDetailedScanResult: true
           }
         );
 
-        // Запускаем выбранную камеру
-        await scanner.setCamera(selectedCamera.id);
         await scanner.start();
 
-        status.innerText = "Ready for Check-In";
-        debug.innerText = "Kamera aktiv";
+        setReadyScreen();
 
       } catch (err) {
 
-        status.innerText = "Kamera konnte nicht gestartet werden";
+        title.innerText = "Kamera konnte nicht gestartet werden";
+        title.style.color = "#F44336";
+
+        subtitle.innerText = "Bitte Kamera-Berechtigung prüfen.";
         debug.innerText = String(err);
       }
-    });
+    }
+
+
+    // Sound durch ersten Tap aktivieren
+    document.addEventListener("click", unlockSound);
+    document.addEventListener("touchstart", unlockSound);
+
+    // Scanner starten, sobald die Seite geladen ist
+    window.addEventListener("DOMContentLoaded", startScanner);
+
   </script>
 
   <style>
+
     body {
       margin: 0;
       padding: 0;
+
       background: #050505;
       color: white;
+
       font-family: Arial, sans-serif;
-      text-align: center;
+
       overflow: hidden;
+      text-align: center;
     }
 
+    /* Kamera läuft im Hintergrund, aber fast unsichtbar */
     #camera {
       position: fixed;
+
       top: 0;
       left: 0;
+
       width: 100vw;
       height: 100vh;
+
       object-fit: cover;
+
       opacity: 0.08;
+
       z-index: 1;
     }
 
+    /* Dunkлый экран поверх камеры */
     .screen {
       position: relative;
+
       z-index: 10;
+
+      width: 100vw;
       height: 100vh;
+
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
     }
 
-    .title {
-      font-size: 48px;
+    .logo {
+      font-size: 50px;
       font-weight: bold;
-      letter-spacing: 2px;
-      margin-bottom: 30px;
+      letter-spacing: 3px;
+
+      margin-bottom: 35px;
     }
 
-    #status {
-      font-size: 32px;
+    #title {
+      font-size: 34px;
+      font-weight: bold;
+
       color: #4CAF50;
-      margin-bottom: 15px;
+
+      margin-bottom: 20px;
+    }
+
+    #name {
+      font-size: 56px;
+      font-weight: bold;
+
+      margin-bottom: 20px;
+    }
+
+    #subtitle {
+      font-size: 24px;
+
+      color: #cccccc;
+
+      margin-bottom: 20px;
     }
 
     #debug {
-      font-size: 18px;
-      color: #999;
+      font-size: 16px;
+
+      color: #777;
+
       max-width: 90%;
       word-break: break-word;
     }
+
+    /* Центральная рамка, чтобы человек понимал куда держать QR */
+    .scan-frame {
+      position: absolute;
+
+      width: 310px;
+      height: 310px;
+
+      border: 3px solid rgba(255,255,255,0.22);
+      border-radius: 20px;
+
+      box-shadow: 0 0 35px rgba(33,150,243,0.25);
+
+      z-index: 5;
+    }
+
+    /* Маленькая подсказка про звук */
+    #soundHint {
+      position: fixed;
+
+      bottom: 18px;
+      left: 0;
+
+      width: 100%;
+
+      font-size: 14px;
+      color: #777;
+
+      z-index: 20;
+    }
+
+    @media (orientation: landscape) {
+
+      .logo {
+        font-size: 42px;
+        margin-bottom: 20px;
+      }
+
+      #title {
+        font-size: 30px;
+      }
+
+      #name {
+        font-size: 44px;
+      }
+
+      #subtitle {
+        font-size: 22px;
+      }
+
+      .scan-frame {
+        width: 260px;
+        height: 260px;
+      }
+    }
+
   </style>
 </head>
 
 <body>
 
+  <!-- Камера -->
   <video id="camera" muted playsinline></video>
 
+  <!-- Видимая рамка сканирования -->
+  <div class="scan-frame"></div>
+
+  <!-- Основной экран -->
   <div class="screen">
-    <div class="title">AXIS JIU-JITSU</div>
-    <div id="status">Kamera startet...</div>
-    <div id="debug">Bitte warten</div>
+
+    <div class="logo">
+      AXIS JIU-JITSU
+    </div>
+
+    <div id="title">
+      Kamera startet...
+    </div>
+
+    <div id="name"></div>
+
+    <div id="subtitle">
+      Bitte warten
+    </div>
+
+    <div id="debug"></div>
+
+  </div>
+
+  <div id="soundHint">
+    Tippe einmal auf den Bildschirm, um Ton zu aktivieren
   </div>
 
 </body>
