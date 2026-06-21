@@ -192,58 +192,64 @@
      * Если Apps Script пришлёт messageLabel/message,
      * тогда scanner page просто покажет их.
      */
-    function showResult(data) {
+ function showResult(data) {
 
-      const result = data.result || "success";
+  const result = data.result || "success";
 
-      app.className = "screen mode-result";
+  app.className = "screen mode-result";
 
-      title.innerText = data.title || "Check-In";
-      title.style.color = data.color || "#4CAF50";
+  title.innerText = data.title || "Check-In";
+  title.style.color = data.color || "#4CAF50";
 
-      nameBox.innerText = data.vorname || "";
-      subtitle.innerText = data.subtitle || "";
-      debug.innerText = data.memberId || "Kamera aktiv";
+  nameBox.innerText = data.vorname || "";
+  subtitle.innerText = data.subtitle || "";
+  debug.innerText = data.memberId || "Kamera aktiv";
 
-      // Сообщение показываем только если оно пришло из Apps Script API
-      if (data.message || data.messageLabel) {
+  // Показываем только само сообщение.
+  // Никаких label / title / Coach Message здесь больше нет.
+  if (data.message) {
 
-        resultMessageBox.style.display = "block";
-        resultMessageLabel.innerText = data.messageLabel || "🥋 Heute";
-        resultMessageText.innerText = data.message || "";
+    resultMessageBox.style.display = "block";
 
-      } else {
+    // label полностью скрываем
+    resultMessageLabel.innerText = "";
+    resultMessageLabel.style.display = "none";
 
-        resultMessageBox.style.display = "none";
-        resultMessageLabel.innerText = "";
-        resultMessageText.innerText = "";
-      }
+    resultMessageText.innerText = data.message;
 
-      // Для duplicate показываем понятный блок даже без API-message
-      if (result === "duplicate") {
+  } else {
 
-        resultMessageBox.style.display = "block";
-        resultMessageLabel.innerText = "⚠ Bereits eingecheckt";
-        resultMessageText.innerText = "Du bist bereits angemeldet.";
-      }
+    resultMessageBox.style.display = "none";
+    resultMessageLabel.innerText = "";
+    resultMessageText.innerText = "";
+  }
 
-      // Для ошибки показываем понятный блок даже без API-message
-      if (result === "not_found" || result === "error" || result === "invalid") {
+  // Для duplicate показываем понятный текст
+  if (result === "duplicate") {
 
-        resultMessageBox.style.display = "block";
-        resultMessageLabel.innerText = "⚠ Hinweis";
-        resultMessageText.innerText = data.subtitle || "Bitte Trainer informieren.";
-      }
+    resultMessageBox.style.display = "block";
+    resultMessageLabel.innerText = "";
+    resultMessageLabel.style.display = "none";
+    resultMessageText.innerText = "Du bist bereits angemeldet.";
+  }
 
-      playSound(data.sound);
-      vibrate(data.sound);
+  // Для ошибки показываем понятный текст
+  if (result === "not_found" || result === "error" || result === "invalid") {
 
-      setTimeout(function () {
-        scanLocked = false;
-        setReadyScreen();
-      }, RESET_DELAY_MS);
-    }
+    resultMessageBox.style.display = "block";
+    resultMessageLabel.innerText = "";
+    resultMessageLabel.style.display = "none";
+    resultMessageText.innerText = data.subtitle || "Bitte Trainer informieren.";
+  }
 
+  playSound(data.sound);
+  vibrate(data.sound);
+
+  setTimeout(function () {
+    scanLocked = false;
+    setReadyScreen();
+  }, RESET_DELAY_MS);
+}
 
     /**
      * extractMemberId(scannedText)
