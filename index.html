@@ -22,7 +22,7 @@
       "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZINd5x2tX6DD6iv6AtDOwcxSDgmYHq0jjjKytEDLOxBfGezJiKw/exec";
 
     // Через сколько секунд вернуться к Ready экрану
-    const RESET_DELAY_MS = 6000;
+    const RESET_DELAY_MS = 4500;
 
     // Защита от повторного срабатывания одного QR
     let scanLocked = false;
@@ -64,7 +64,7 @@
         }
 
       } catch (err) {
-        // Если звук не активировался — просто продолжаем без ошибки
+        // Если звук не активировался — check-in всё равно работает
       }
     }
 
@@ -98,8 +98,8 @@
      * playSound(type)
      *
      * Играет разные звуки:
-     * success   = красивый короткий положительный звук
-     * duplicate = предупреждение, что ученик уже отмечен
+     * success   = успешный check-in
+     * duplicate = уже отмечен
      * error     = ошибка
      */
     function playSound(type) {
@@ -114,20 +114,20 @@
 
         if (type === "success") {
 
-          // Успешный check-in: приятный восходящий звук
+          // Успешный check-in
           playTone(660, now, 0.18, 0.45);
           playTone(880, now + 0.14, 0.18, 0.45);
           playTone(1175, now + 0.28, 0.22, 0.38);
 
         } else if (type === "duplicate") {
 
-          // Повторный check-in: два мягких предупреждающих сигнала
+          // Повторный check-in
           playTone(420, now, 0.18, 0.42);
           playTone(420, now + 0.25, 0.18, 0.42);
 
         } else {
 
-          // Ошибка: низкий короткий сигнал
+          // Ошибка
           playTone(220, now, 0.35, 0.45);
         }
 
@@ -160,44 +160,6 @@
 
 
     /**
-     * getLocalMessage(data)
-     *
-     * Временный совет/сообщение после check-in.
-     * Позже можно заменить на сообщение из Apps Script.
-     */
-    function getLocalMessage(data) {
-
-      if (data && data.message) {
-        return {
-          label: data.messageLabel || "🥋 Heute",
-          text: data.message
-        };
-      }
-
-      const messages = [
-        {
-          label: "🥋 Tipp",
-          text: "Heute sauber arbeiten. Kein Ego, nur Technik."
-        },
-        {
-          label: "🔥 Aufgabe",
-          text: "Mach heute eine Technik besser als letztes Mal."
-        },
-        {
-          label: "💪 Fokus",
-          text: "Trainiere hart, aber schlau. Ohne Verletzung ist auch ein Sieg."
-        },
-        {
-          label: "🎯 Challenge",
-          text: "Such dir heute einen Partner und hilf ihm bei einer Technik."
-        }
-      ];
-
-      return messages[Math.floor(Math.random() * messages.length)];
-    }
-
-
-    /**
      * setReadyScreen()
      *
      * Возвращает экран в режим ожидания.
@@ -224,11 +186,15 @@
      *
      * Показывает результат check-in,
      * который пришёл из Apps Script API.
+     *
+     * Важно:
+     * мотивационные сообщения НЕ хранятся здесь.
+     * Если Apps Script пришлёт messageLabel/message,
+     * тогда scanner page просто покажет их.
      */
     function showResult(data) {
 
       const result = data.result || "success";
-      const message = getLocalMessage(data);
 
       app.className = "screen mode-result";
 
@@ -239,15 +205,32 @@
       subtitle.innerText = data.subtitle || "";
       debug.innerText = data.memberId || "Kamera aktiv";
 
-      resultMessageBox.style.display = "block";
+      // Сообщение показываем только если оно пришло из Apps Script API
+      if (data.message || data.messageLabel) {
 
-      if (result === "success") {
-        resultMessageLabel.innerText = message.label;
-        resultMessageText.innerText = message.text;
-      } else if (result === "duplicate") {
-        resultMessageLabel.innerText = "🏆 Schon dabei?";
-        resultMessageText.innerText = "Du bist bereits angemeldet. Hilf heute jemandem auf der Matte.";
+        resultMessageBox.style.display = "block";
+        resultMessageLabel.innerText = data.messageLabel || "🥋 Heute";
+        resultMessageText.innerText = data.message || "";
+
       } else {
+
+        resultMessageBox.style.display = "none";
+        resultMessageLabel.innerText = "";
+        resultMessageText.innerText = "";
+      }
+
+      // Для duplicate показываем понятный блок даже без API-message
+      if (result === "duplicate") {
+
+        resultMessageBox.style.display = "block";
+        resultMessageLabel.innerText = "⚠ Bereits eingecheckt";
+        resultMessageText.innerText = "Du bist bereits angemeldet.";
+      }
+
+      // Для ошибки показываем понятный блок даже без API-message
+      if (result === "not_found" || result === "error" || result === "invalid") {
+
+        resultMessageBox.style.display = "block";
         resultMessageLabel.innerText = "⚠ Hinweis";
         resultMessageText.innerText = data.subtitle || "Bitte Trainer informieren.";
       }
@@ -768,7 +751,8 @@
 
       </div>
 
-      <!-- Совет / Challenge после check-in -->
+      <!-- Сообщение после check-in.
+           Содержимое приходит из Apps Script API. -->
       <div id="resultMessageBox" class="result-message-box">
         <div id="resultMessageLabel"></div>
         <div id="resultMessageText"></div>
