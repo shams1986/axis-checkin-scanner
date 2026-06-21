@@ -21,8 +21,8 @@
     const WEB_APP_URL =
       "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZINd5x2tX6DD6iv6AtDOwcxSDgmYHq0jjjKytEDLOxBfGezJiKw/exec";
 
-    // Через сколько секунд вернуться к Ready экрану
-    const RESET_DELAY_MS = 4500;
+    // Через сколько секунд возвращаться к Ready экрану
+    const RESET_DELAY_MS = 5200;
 
     // Защита от повторного срабатывания одного QR
     let scanLocked = false;
@@ -32,18 +32,73 @@
 
     // HTML элементы
     let video;
-    let title;
-    let nameBox;
-    let subtitle;
+    let app;
+    let readyTitle;
+    let readySubtitle;
+    let resultTitle;
+    let resultName;
+    let resultTraining;
+    let messageLabel;
+    let messageText;
     let debug;
     let soundHint;
 
 
     /**
+     * LOCAL_MESSAGES
+     *
+     * Временные сообщения для check-in.
+     *
+     * Сейчас они живут в index.html.
+     * Позже перенесём их в Apps Script API,
+     * чтобы система могла учитывать:
+     * - тип тренировки
+     * - кто уже пришёл
+     * - streak
+     * - kids/adults
+     * - количество тренировок
+     */
+    const LOCAL_MESSAGES = [
+      {
+        label: "🥋 Trainingsfokus",
+        text: "Technik zuerst, Kraft später. Heute sauber arbeiten."
+      },
+      {
+        label: "🔥 Kleine Challenge",
+        text: "Mach heute eine Technik besser als beim letzten Mal."
+      },
+      {
+        label: "😄 Matten-Mission",
+        text: "Such dir heute einen Partner und hilf ihm bei einer Technik."
+      },
+      {
+        label: "💪 Tagesziel",
+        text: "100% Einsatz. Kein Ego. Nur Jiu-Jitsu."
+      },
+      {
+        label: "😎 Coach sagt",
+        text: "Trainiere hart, aber schlau. Verletzungsfrei ist auch ein Sieg."
+      },
+      {
+        label: "🎯 Heute wichtig",
+        text: "Ein guter Escape zählt mehr als zehn wilde Angriffe."
+      },
+      {
+        label: "⚡ Mini-Aufgabe",
+        text: "Frag heute jemanden nach seinem Lieblings-Setup."
+      },
+      {
+        label: "🏆 Challenge",
+        text: "Mach heute einen sauberen Armbar-Drill — kontrolliert und technisch."
+      }
+    ];
+
+
+    /**
      * unlockSound()
      *
-     * Мобильные браузеры часто блокируют звук,
-     * пока пользователь один раз не нажмёт на экран.
+     * Mobile Browser blockieren oft Sound,
+     * bis der Nutzer einmal auf den Bildschirm tippt.
      */
     function unlockSound() {
 
@@ -60,90 +115,84 @@
         }
 
       } catch (err) {
-        // Если звук не активировался — просто продолжаем без ошибки
+        // Wenn Sound blockiert bleibt, läuft Check-In trotzdem weiter
       }
     }
 
 
-   /**
- * playTone(frequency, startTime, duration, volume)
- *
- * Проигрывает один короткий тон.
- *
- * frequency = высота звука
- * startTime = когда начать
- * duration  = сколько длится
- * volume    = громкость
- */
-function playTone(frequency, startTime, duration, volume) {
+    /**
+     * playTone(frequency, startTime, duration, volume)
+     *
+     * Spielt einen einzelnen Ton.
+     */
+    function playTone(frequency, startTime, duration, volume) {
 
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
 
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
 
-  oscillator.type = "sine";
-  oscillator.frequency.value = frequency;
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
 
-  gain.gain.setValueAtTime(0.001, startTime);
-  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-  oscillator.start(startTime);
-  oscillator.stop(startTime + duration + 0.03);
-}
-
-
-/**
- * playSound(type)
- *
- * Играет разные звуки:
- *
- * success   = красивый короткий положительный звук
- * duplicate = предупреждение, что ученик уже отмечен
- * error     = ошибка
- */
-function playSound(type) {
-
-  try {
-
-    if (!audioContext) {
-      return;
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration + 0.03);
     }
 
-    const now = audioContext.currentTime;
 
-    if (type === "success") {
+    /**
+     * playSound(type)
+     *
+     * Spielt verschiedene Sounds:
+     * success   = erfolgreicher Check-In
+     * duplicate = bereits eingecheckt
+     * error     = Fehler
+     */
+    function playSound(type) {
 
-      // Успешный check-in: приятный восходящий звук
-      playTone(660, now, 0.18, 0.45);
-      playTone(880, now + 0.14, 0.18, 0.45);
-      playTone(1175, now + 0.28, 0.22, 0.38);
+      try {
 
-    } else if (type === "duplicate") {
+        if (!audioContext) {
+          return;
+        }
 
-      // Повторный check-in: два мягких предупреждающих сигнала
-      playTone(420, now, 0.18, 0.42);
-      playTone(420, now + 0.25, 0.18, 0.42);
+        const now = audioContext.currentTime;
 
-    } else {
+        if (type === "success") {
 
-      // Ошибка: низкий короткий сигнал
-      playTone(220, now, 0.35, 0.45);
+          // Positiver kurzer Check-In Sound
+          playTone(660, now, 0.18, 0.45);
+          playTone(880, now + 0.14, 0.18, 0.45);
+          playTone(1175, now + 0.28, 0.22, 0.38);
+
+        } else if (type === "duplicate") {
+
+          // Warnsound für bereits eingecheckt
+          playTone(420, now, 0.18, 0.42);
+          playTone(420, now + 0.25, 0.18, 0.42);
+
+        } else {
+
+          // Fehlersound
+          playTone(220, now, 0.35, 0.45);
+        }
+
+      } catch (err) {
+        // Soundfehler sollen Check-In nicht stoppen
+      }
     }
-
-  } catch (err) {
-    // Если браузер заблокировал звук — check-in всё равно работает
-  }
-}
 
 
     /**
      * vibrate(type)
      *
-     * Лёгкая вибрация на телефоне,
-     * если браузер это поддерживает.
+     * Leichte Vibration am Handy,
+     * wenn der Browser es unterstützt.
      */
     function vibrate(type) {
 
@@ -162,17 +211,40 @@ function playSound(type) {
 
 
     /**
+     * getRandomLocalMessage(data)
+     *
+     * Wählt aktuell eine lokale Nachricht aus.
+     *
+     * Später kann data.message direkt vom Apps Script API kommen.
+     */
+    function getRandomLocalMessage(data) {
+
+      // Wenn API später eine eigene Message schickt, nehmen wir diese
+      if (data && data.message) {
+        return {
+          label: data.messageLabel || "🥋 Heute",
+          text: data.message
+        };
+      }
+
+      const index = Math.floor(Math.random() * LOCAL_MESSAGES.length);
+
+      return LOCAL_MESSAGES[index];
+    }
+
+
+    /**
      * setReadyScreen()
      *
-     * Возвращает экран в режим ожидания.
+     * Zeigt den normalen Scanner-Startbildschirm.
      */
     function setReadyScreen() {
 
-      title.innerText = "Ready for Check-In";
-      title.style.color = "#4CAF50";
+      app.className = "app mode-ready";
 
-      nameBox.innerText = "";
-      subtitle.innerText = "QR Code vor die Kamera halten";
+      readyTitle.innerText = "Ready for Check-In";
+      readySubtitle.innerText = "QR Code vor die Kamera halten";
+
       debug.innerText = "Kamera aktiv";
     }
 
@@ -180,20 +252,51 @@ function playSound(type) {
     /**
      * showResult(data)
      *
-     * Показывает результат check-in,
-     * который пришёл из Apps Script API.
+     * Zeigt das Ergebnis vom Apps Script API.
+     *
+     * Bei Erfolg:
+     * - links Check-In erfolgreich + Name
+     * - rechts Tipp / Challenge / Hinweis
      */
     function showResult(data) {
 
-      title.innerText = data.title || "Check-In";
-      title.style.color = data.color || "#4CAF50";
+      const result = data.result || "success";
+      const trainingName = data.trainingName || "Training";
 
-      nameBox.innerText = data.vorname || "";
-      subtitle.innerText = data.subtitle || "";
-      debug.innerText = data.memberId || "";
+      app.className = "app mode-result";
 
-      playSound(data.sound);
-      vibrate(data.sound);
+      resultTitle.innerText = data.title || "Check-In erfolgreich!";
+      resultTitle.style.color = data.color || "#4CAF50";
+
+      resultName.innerText = data.vorname || "";
+
+      if (result === "success") {
+        resultTraining.innerText = "Willkommen zum " + trainingName + "!";
+      } else {
+        resultTraining.innerText = data.subtitle || "";
+      }
+
+      const localMessage = getRandomLocalMessage(data);
+
+      if (result === "success") {
+        messageLabel.innerText = localMessage.label;
+        messageText.innerText = localMessage.text;
+      }
+
+      if (result === "duplicate") {
+        messageLabel.innerText = "🏆 Schon dabei?";
+        messageText.innerText = "Du bist bereits angemeldet. Hilf heute jemandem auf der Matte.";
+      }
+
+      if (result === "not_found" || result === "error" || result === "invalid") {
+        messageLabel.innerText = "⚠ Hinweis";
+        messageText.innerText = data.subtitle || "Bitte Trainer informieren.";
+      }
+
+      debug.innerText = data.memberId || "Kamera aktiv";
+
+      playSound(data.sound || "success");
+      vibrate(data.sound || "success");
 
       setTimeout(function () {
         scanLocked = false;
@@ -205,10 +308,10 @@ function playSound(type) {
     /**
      * extractMemberId(scannedText)
      *
-     * Достаёт MemberID из QR-кода.
+     * Holt MemberID aus QR-Code.
      *
-     * Ожидаемый QR:
-     * .../exec?id=AJJ010
+     * Erwartet:
+     * WEB_APP_URL?id=AJJ010
      */
     function extractMemberId(scannedText) {
 
@@ -224,7 +327,7 @@ function playSound(type) {
         }
 
       } catch (err) {
-        // Если это не URL — пробуем regex ниже
+        // Wenn QR kein URL ist, probieren wir regex unten
       }
 
       const match = text.match(/[?&]id=([^&]+)/);
@@ -233,7 +336,7 @@ function playSound(type) {
         return decodeURIComponent(match[1]);
       }
 
-      // Запасной вариант, если когда-нибудь QR будет содержать только AJJ010
+      // Falls QR später nur AJJ010 enthält
       if (/^AJJ[0-9]+$/i.test(text)) {
         return text;
       }
@@ -245,11 +348,8 @@ function playSound(type) {
     /**
      * callCheckinApi(memberId)
      *
-     * Отправляет MemberID в Apps Script API
-     * без перехода на script.google.com.
-     *
-     * GitHub scanner остаётся открытым,
-     * камера не выключается.
+     * Sendet MemberID an Apps Script API,
+     * ohne die GitHub Scanner Seite zu verlassen.
      */
     function callCheckinApi(memberId) {
 
@@ -260,11 +360,11 @@ function playSound(type) {
 
       window[callbackName] = function (data) {
 
-        // Удаляем временный script и callback
+        // Temporären callback und script entfernen
         delete window[callbackName];
         script.remove();
 
-        // Показываем результат на scanner page
+        // Ergebnis anzeigen
         showResult(data);
       };
 
@@ -298,7 +398,7 @@ function playSound(type) {
     /**
      * onScanSuccess(result)
      *
-     * Запускается, когда камера прочитала QR.
+     * Wird ausgelöst, wenn QR erkannt wurde.
      */
     function onScanSuccess(result) {
 
@@ -326,10 +426,10 @@ function playSound(type) {
         return;
       }
 
-      title.innerText = "Check-In läuft...";
-      title.style.color = "#2196F3";
-      nameBox.innerText = "";
-      subtitle.innerText = "Bitte kurz warten.";
+      app.className = "app mode-loading";
+
+      readyTitle.innerText = "Check-In läuft...";
+      readySubtitle.innerText = "Bitte kurz warten.";
       debug.innerText = memberId;
 
       callCheckinApi(memberId);
@@ -339,14 +439,23 @@ function playSound(type) {
     /**
      * startScanner()
      *
-     * Запускает камеру и QR Scanner.
+     * Startet Kamera und QR Scanner.
      */
     async function startScanner() {
 
       video = document.getElementById("camera");
-      title = document.getElementById("title");
-      nameBox = document.getElementById("name");
-      subtitle = document.getElementById("subtitle");
+      app = document.getElementById("app");
+
+      readyTitle = document.getElementById("readyTitle");
+      readySubtitle = document.getElementById("readySubtitle");
+
+      resultTitle = document.getElementById("resultTitle");
+      resultName = document.getElementById("resultName");
+      resultTraining = document.getElementById("resultTraining");
+
+      messageLabel = document.getElementById("messageLabel");
+      messageText = document.getElementById("messageText");
+
       debug = document.getElementById("debug");
       soundHint = document.getElementById("soundHint");
 
@@ -368,10 +477,10 @@ function playSound(type) {
 
       } catch (err) {
 
-        title.innerText = "Kamera konnte nicht gestartet werden";
-        title.style.color = "#F44336";
+        app.className = "app mode-error";
 
-        subtitle.innerText = "Bitte Kamera-Berechtigung prüfen.";
+        readyTitle.innerText = "Kamera konnte nicht gestartet werden";
+        readySubtitle.innerText = "Bitte Kamera-Berechtigung prüfen.";
         debug.innerText = String(err);
       }
     }
@@ -401,7 +510,7 @@ function playSound(type) {
       text-align: center;
     }
 
-    /* Kamera läuft im Hintergrund, aber fast unsichtbar */
+    /* Kamera läuft im Hintergrund */
     #camera {
       position: fixed;
 
@@ -413,13 +522,30 @@ function playSound(type) {
 
       object-fit: cover;
 
-      opacity: 0.08;
+      opacity: 0.09;
 
       z-index: 1;
     }
 
-    /* Dunkлый экран поверх камеры */
-    .screen {
+    /* Dunkler Layer über der Kamera */
+    .background-overlay {
+      position: fixed;
+
+      top: 0;
+      left: 0;
+
+      width: 100vw;
+      height: 100vh;
+
+      background:
+        radial-gradient(circle at center, rgba(20, 80, 120, 0.18), rgba(0,0,0,0.94) 62%),
+        linear-gradient(135deg, rgba(0, 120, 255, 0.10), rgba(255, 0, 0, 0.08));
+
+      z-index: 2;
+    }
+
+    /* Haupt-App */
+    .app {
       position: relative;
 
       z-index: 10;
@@ -429,42 +555,209 @@ function playSound(type) {
 
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
+
+      box-sizing: border-box;
+
+      padding: 34px 22px 24px 22px;
     }
 
-    .logo {
-      font-size: 50px;
+    /* Logo oben */
+    .brand-logo {
+      width: min(440px, 76vw);
+      max-height: 150px;
+
+      object-fit: contain;
+
+      margin-bottom: 28px;
+
+      filter: drop-shadow(0 0 16px rgba(255,255,255,0.16));
+    }
+
+    /* Fallback, falls logo file fehlt */
+    .logo-fallback {
+      display: none;
+
+      font-size: 48px;
       font-weight: bold;
       letter-spacing: 3px;
 
-      margin-bottom: 35px;
+      margin-bottom: 34px;
     }
 
-    #title {
-      font-size: 34px;
+    /* Scanner-Block */
+    .scanner-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* QR Rahmen */
+    .scan-frame {
+      width: min(360px, 74vw);
+      height: min(360px, 74vw);
+
+      border: 3px solid rgba(120, 200, 255, 0.90);
+      border-radius: 26px;
+
+      box-shadow:
+        0 0 18px rgba(80, 180, 255, 0.75),
+        inset 0 0 22px rgba(80, 180, 255, 0.18);
+
+      position: relative;
+
+      margin-bottom: 28px;
+
+      pointer-events: none;
+    }
+
+    /* Kleine Ecklinien im Scanner-Rahmen */
+    .scan-frame::before,
+    .scan-frame::after {
+      content: "";
+
+      position: absolute;
+
+      width: calc(100% - 42px);
+      height: calc(100% - 42px);
+
+      top: 18px;
+      left: 18px;
+
+      border: 4px solid rgba(170, 220, 255, 0.95);
+      border-radius: 18px;
+
+      clip-path: polygon(
+        0 0, 20% 0, 20% 6%, 6% 6%, 6% 20%, 0 20%,
+        0 80%, 6% 80%, 6% 94%, 20% 94%, 20% 100%, 0 100%,
+        80% 100%, 80% 94%, 94% 94%, 94% 80%, 100% 80%,
+        100% 100%, 100% 0, 80% 0, 80% 6%, 94% 6%, 94% 20%, 100% 20%, 100% 0
+      );
+    }
+
+    /* Ready Text */
+    .ready-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #readyTitle {
+      font-size: 36px;
       font-weight: bold;
 
       color: #4CAF50;
 
-      margin-bottom: 20px;
+      margin-bottom: 14px;
     }
 
-    #name {
-      font-size: 56px;
-      font-weight: bold;
-
-      margin-bottom: 20px;
-    }
-
-    #subtitle {
+    #readySubtitle {
       font-size: 24px;
 
-      color: #cccccc;
+      color: #dddddd;
 
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
+    /* Result Layout */
+    .result-panel {
+      display: none;
+
+      width: min(920px, 94vw);
+
+      grid-template-columns: 1fr 1.25fr;
+      gap: 24px;
+
+      margin-top: 12px;
+    }
+
+    .result-left,
+    .result-message {
+      background: rgba(0, 0, 0, 0.58);
+
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 24px;
+
+      box-shadow:
+        0 0 24px rgba(0,0,0,0.45),
+        inset 0 0 26px rgba(255,255,255,0.035);
+
+      padding: 28px 24px;
+    }
+
+    .result-left {
+      text-align: left;
+    }
+
+    .result-icon {
+      width: 54px;
+      height: 54px;
+
+      border: 3px solid #4CAF50;
+      border-radius: 50%;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      color: #4CAF50;
+      font-size: 34px;
+      font-weight: bold;
+
+      margin-bottom: 18px;
+    }
+
+    #resultTitle {
+      font-size: 28px;
+      font-weight: bold;
+
+      color: #4CAF50;
+
+      margin-bottom: 14px;
+    }
+
+    #resultName {
+      font-size: 52px;
+      font-weight: bold;
+
+      color: white;
+
+      margin-bottom: 12px;
+    }
+
+    #resultTraining {
+      font-size: 22px;
+      line-height: 1.35;
+
+      color: #dddddd;
+    }
+
+    .result-message {
+      text-align: center;
+
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    #messageLabel {
+      font-size: 22px;
+      font-weight: bold;
+
+      color: #ffffff;
+
+      margin-bottom: 18px;
+    }
+
+    #messageText {
+      font-size: 28px;
+      font-weight: bold;
+      line-height: 1.35;
+
+      color: #ffffff;
+    }
+
+    /* Debug / Kamera Status */
     #debug {
       font-size: 16px;
 
@@ -472,36 +765,11 @@ function playSound(type) {
 
       max-width: 90%;
       word-break: break-word;
+
+      margin-top: 10px;
     }
 
-  /* 
- * Визуальная рамка сканирования.
- * Она не влияет на сам scanner,
- * а только показывает ученику, куда примерно держать QR.
- */
-.scan-frame {
-  position: fixed;
-
-  /* Ставим рамку строго по центру экрана */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-
-  width: 360px;
-  height: 360px;
-
-  border: 3px solid rgba(255,255,255,0.28);
-  border-radius: 22px;
-
-  box-shadow: 0 0 40px rgba(33,150,243,0.35);
-
-  z-index: 5;
-
-  /* Чтобы рамка не мешала нажатию на экран */
-  pointer-events: none;
-}
-
-    /* Маленькая подсказка про звук */
+    /* Sound Hinweis */
     #soundHint {
       position: fixed;
 
@@ -516,29 +784,124 @@ function playSound(type) {
       z-index: 20;
     }
 
-    @media (orientation: landscape) {
+    /* Mode: Ready */
+    .mode-ready .result-panel {
+      display: none;
+    }
 
-      .logo {
-        font-size: 42px;
-        margin-bottom: 20px;
+    .mode-ready .scanner-zone {
+      display: flex;
+    }
+
+    /* Mode: Loading */
+    .mode-loading .result-panel {
+      display: none;
+    }
+
+    .mode-loading .scanner-zone {
+      display: flex;
+    }
+
+    /* Mode: Result */
+    .mode-result .scanner-zone {
+      display: none;
+    }
+
+    .mode-result .result-panel {
+      display: grid;
+    }
+
+    /* Mobile Portrait */
+    @media (max-width: 700px) {
+
+      .app {
+        padding-top: 32px;
       }
 
-      #title {
+      .brand-logo {
+        width: min(360px, 82vw);
+        margin-bottom: 26px;
+      }
+
+      #readyTitle {
         font-size: 30px;
       }
 
-      #name {
-        font-size: 44px;
+      #readySubtitle {
+        font-size: 19px;
       }
 
-      #subtitle {
+      .scan-frame {
+        width: min(330px, 78vw);
+        height: min(330px, 78vw);
+      }
+
+      .result-panel {
+        grid-template-columns: 1fr;
+
+        gap: 14px;
+
+        margin-top: 0;
+      }
+
+      .result-left,
+      .result-message {
+        padding: 22px 20px;
+      }
+
+      #resultName {
+        font-size: 46px;
+      }
+
+      #messageText {
+        font-size: 23px;
+      }
+    }
+
+    /* Landscape */
+    @media (orientation: landscape) and (max-height: 600px) {
+
+      .app {
+        padding-top: 18px;
+      }
+
+      .brand-logo {
+        width: min(300px, 34vw);
+        margin-bottom: 12px;
+      }
+
+      .scan-frame {
+        width: 260px;
+        height: 260px;
+
+        margin-bottom: 16px;
+      }
+
+      #readyTitle {
+        font-size: 28px;
+      }
+
+      #readySubtitle {
+        font-size: 18px;
+      }
+
+      .result-panel {
+        width: min(880px, 94vw);
+
+        gap: 18px;
+      }
+
+      .result-left,
+      .result-message {
+        padding: 20px 22px;
+      }
+
+      #resultName {
+        font-size: 40px;
+      }
+
+      #messageText {
         font-size: 22px;
-      }
-
-    /* В горизонтальном режиме рамка меньше, но всё равно по центру */
-     .scan-frame {
-       width: 320px;
-       height: 320px;
       }
     }
 
@@ -547,27 +910,73 @@ function playSound(type) {
 
 <body>
 
-  <!-- Камера -->
+  <!-- Kamera -->
   <video id="camera" muted playsinline></video>
 
-  <!-- Видимая рамка сканирования -->
-  <div class="scan-frame"></div>
+  <!-- Dunkler Hintergrund über der Kamera -->
+  <div class="background-overlay"></div>
 
-  <!-- Основной экран -->
-  <div class="screen">
+  <!-- Haupt-App -->
+  <div id="app" class="app mode-ready">
 
-    <div class="logo">
+    <!-- Logo -->
+    <img
+      class="brand-logo"
+      src="axis-logo.png"
+      alt="AXIS JIU-JITSU"
+      onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';"
+    >
+
+    <div id="logoFallback" class="logo-fallback">
       AXIS JIU-JITSU
     </div>
 
-    <div id="title">
-      Kamera startet...
+    <!-- Ready / Scanner Screen -->
+    <div class="scanner-zone">
+
+      <div class="scan-frame"></div>
+
+      <div class="ready-panel">
+
+        <div id="readyTitle">
+          Kamera startet...
+        </div>
+
+        <div id="readySubtitle">
+          Bitte warten
+        </div>
+
+      </div>
+
     </div>
 
-    <div id="name"></div>
+    <!-- Result Screen -->
+    <div class="result-panel">
 
-    <div id="subtitle">
-      Bitte warten
+      <div class="result-left">
+
+        <div class="result-icon">
+          ✓
+        </div>
+
+        <div id="resultTitle">
+          Check-In erfolgreich!
+        </div>
+
+        <div id="resultName"></div>
+
+        <div id="resultTraining"></div>
+
+      </div>
+
+      <div class="result-message">
+
+        <div id="messageLabel"></div>
+
+        <div id="messageText"></div>
+
+      </div>
+
     </div>
 
     <div id="debug"></div>
