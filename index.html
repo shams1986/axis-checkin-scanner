@@ -32,11 +32,15 @@
 
     // HTML элементы
     let video;
+    let app;
     let title;
     let nameBox;
     let subtitle;
     let debug;
     let soundHint;
+    let resultMessageBox;
+    let resultMessageLabel;
+    let resultMessageText;
 
 
     /**
@@ -65,78 +69,72 @@
     }
 
 
-   /**
- * playTone(frequency, startTime, duration, volume)
- *
- * Проигрывает один короткий тон.
- *
- * frequency = высота звука
- * startTime = когда начать
- * duration  = сколько длится
- * volume    = громкость
- */
-function playTone(frequency, startTime, duration, volume) {
+    /**
+     * playTone(frequency, startTime, duration, volume)
+     *
+     * Проигрывает один короткий тон.
+     */
+    function playTone(frequency, startTime, duration, volume) {
 
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
 
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
 
-  oscillator.type = "sine";
-  oscillator.frequency.value = frequency;
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
 
-  gain.gain.setValueAtTime(0.001, startTime);
-  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
-  oscillator.start(startTime);
-  oscillator.stop(startTime + duration + 0.03);
-}
-
-
-/**
- * playSound(type)
- *
- * Играет разные звуки:
- *
- * success   = красивый короткий положительный звук
- * duplicate = предупреждение, что ученик уже отмечен
- * error     = ошибка
- */
-function playSound(type) {
-
-  try {
-
-    if (!audioContext) {
-      return;
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration + 0.03);
     }
 
-    const now = audioContext.currentTime;
 
-    if (type === "success") {
+    /**
+     * playSound(type)
+     *
+     * Играет разные звуки:
+     * success   = красивый короткий положительный звук
+     * duplicate = предупреждение, что ученик уже отмечен
+     * error     = ошибка
+     */
+    function playSound(type) {
 
-      // Успешный check-in: приятный восходящий звук
-      playTone(660, now, 0.18, 0.45);
-      playTone(880, now + 0.14, 0.18, 0.45);
-      playTone(1175, now + 0.28, 0.22, 0.38);
+      try {
 
-    } else if (type === "duplicate") {
+        if (!audioContext) {
+          return;
+        }
 
-      // Повторный check-in: два мягких предупреждающих сигнала
-      playTone(420, now, 0.18, 0.42);
-      playTone(420, now + 0.25, 0.18, 0.42);
+        const now = audioContext.currentTime;
 
-    } else {
+        if (type === "success") {
 
-      // Ошибка: низкий короткий сигнал
-      playTone(220, now, 0.35, 0.45);
+          // Успешный check-in: приятный восходящий звук
+          playTone(660, now, 0.18, 0.45);
+          playTone(880, now + 0.14, 0.18, 0.45);
+          playTone(1175, now + 0.28, 0.22, 0.38);
+
+        } else if (type === "duplicate") {
+
+          // Повторный check-in: два мягких предупреждающих сигнала
+          playTone(420, now, 0.18, 0.42);
+          playTone(420, now + 0.25, 0.18, 0.42);
+
+        } else {
+
+          // Ошибка: низкий короткий сигнал
+          playTone(220, now, 0.35, 0.45);
+        }
+
+      } catch (err) {
+        // Если браузер заблокировал звук — check-in всё равно работает
+      }
     }
-
-  } catch (err) {
-    // Если браузер заблокировал звук — check-in всё равно работает
-  }
-}
 
 
     /**
@@ -162,18 +160,62 @@ function playSound(type) {
 
 
     /**
+     * getLocalMessage(data)
+     *
+     * Временный совет/сообщение после check-in.
+     * Позже можно заменить на сообщение из Apps Script.
+     */
+    function getLocalMessage(data) {
+
+      if (data && data.message) {
+        return {
+          label: data.messageLabel || "🥋 Heute",
+          text: data.message
+        };
+      }
+
+      const messages = [
+        {
+          label: "🥋 Tipp",
+          text: "Heute sauber arbeiten. Kein Ego, nur Technik."
+        },
+        {
+          label: "🔥 Aufgabe",
+          text: "Mach heute eine Technik besser als letztes Mal."
+        },
+        {
+          label: "💪 Fokus",
+          text: "Trainiere hart, aber schlau. Ohne Verletzung ist auch ein Sieg."
+        },
+        {
+          label: "🎯 Challenge",
+          text: "Such dir heute einen Partner und hilf ihm bei einer Technik."
+        }
+      ];
+
+      return messages[Math.floor(Math.random() * messages.length)];
+    }
+
+
+    /**
      * setReadyScreen()
      *
      * Возвращает экран в режим ожидания.
      */
     function setReadyScreen() {
 
+      app.className = "screen mode-ready";
+
       title.innerText = "Ready for Check-In";
       title.style.color = "#4CAF50";
 
       nameBox.innerText = "";
       subtitle.innerText = "QR Code vor die Kamera halten";
-      debug.innerText = "Kamera aktiv";
+      debug.innerText = "● Kamera aktiv";
+
+      resultMessageBox.style.display = "none";
+      resultMessageLabel.innerText = "";
+      resultMessageText.innerText = "";
     }
 
 
@@ -185,12 +227,30 @@ function playSound(type) {
      */
     function showResult(data) {
 
+      const result = data.result || "success";
+      const message = getLocalMessage(data);
+
+      app.className = "screen mode-result";
+
       title.innerText = data.title || "Check-In";
       title.style.color = data.color || "#4CAF50";
 
       nameBox.innerText = data.vorname || "";
       subtitle.innerText = data.subtitle || "";
-      debug.innerText = data.memberId || "";
+      debug.innerText = data.memberId || "Kamera aktiv";
+
+      resultMessageBox.style.display = "block";
+
+      if (result === "success") {
+        resultMessageLabel.innerText = message.label;
+        resultMessageText.innerText = message.text;
+      } else if (result === "duplicate") {
+        resultMessageLabel.innerText = "🏆 Schon dabei?";
+        resultMessageText.innerText = "Du bist bereits angemeldet. Hilf heute jemandem auf der Matte.";
+      } else {
+        resultMessageLabel.innerText = "⚠ Hinweis";
+        resultMessageText.innerText = data.subtitle || "Bitte Trainer informieren.";
+      }
 
       playSound(data.sound);
       vibrate(data.sound);
@@ -206,9 +266,6 @@ function playSound(type) {
      * extractMemberId(scannedText)
      *
      * Достаёт MemberID из QR-кода.
-     *
-     * Ожидаемый QR:
-     * .../exec?id=AJJ010
      */
     function extractMemberId(scannedText) {
 
@@ -247,9 +304,6 @@ function playSound(type) {
      *
      * Отправляет MemberID в Apps Script API
      * без перехода на script.google.com.
-     *
-     * GitHub scanner остаётся открытым,
-     * камера не выключается.
      */
     function callCheckinApi(memberId) {
 
@@ -326,11 +380,15 @@ function playSound(type) {
         return;
       }
 
+      app.className = "screen mode-loading";
+
       title.innerText = "Check-In läuft...";
       title.style.color = "#2196F3";
       nameBox.innerText = "";
       subtitle.innerText = "Bitte kurz warten.";
       debug.innerText = memberId;
+
+      resultMessageBox.style.display = "none";
 
       callCheckinApi(memberId);
     }
@@ -344,11 +402,17 @@ function playSound(type) {
     async function startScanner() {
 
       video = document.getElementById("camera");
+      app = document.getElementById("screen");
+
       title = document.getElementById("title");
       nameBox = document.getElementById("name");
       subtitle = document.getElementById("subtitle");
       debug = document.getElementById("debug");
       soundHint = document.getElementById("soundHint");
+
+      resultMessageBox = document.getElementById("resultMessageBox");
+      resultMessageLabel = document.getElementById("resultMessageLabel");
+      resultMessageText = document.getElementById("resultMessageText");
 
       try {
 
@@ -401,7 +465,7 @@ function playSound(type) {
       text-align: center;
     }
 
-    /* Kamera läuft im Hintergrund, aber fast unsichtbar */
+    /* Камера работает на фоне */
     #camera {
       position: fixed;
 
@@ -418,7 +482,7 @@ function playSound(type) {
       z-index: 1;
     }
 
-    /* Dunkлый экран поверх камеры */
+    /* Основной экран */
     .screen {
       position: relative;
 
@@ -429,44 +493,72 @@ function playSound(type) {
 
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      align-items: center;
+
+      box-sizing: border-box;
+      padding-top: 34px;
+    }
+
+    /* Логотип сверху */
+    .logo {
+      margin-bottom: 26px;
+    }
+
+    .logo img {
+      width: min(390px, 78vw);
+      max-height: 130px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 14px rgba(255,255,255,0.18));
+    }
+
+    /* Ready зона: логотип → рамка → текст */
+    .ready-zone {
+      display: flex;
+      flex-direction: column;
       align-items: center;
     }
 
-    .logo {
-      font-size: 50px;
-      font-weight: bold;
-      letter-spacing: 3px;
+    /* Рамка сканирования */
+    .scan-frame {
+      width: min(360px, 76vw);
+      height: min(360px, 76vw);
 
-      margin-bottom: 35px;
+      border: 3px solid rgba(255,255,255,0.28);
+      border-radius: 22px;
+
+      box-shadow: 0 0 40px rgba(33,150,243,0.35);
+
+      margin-bottom: 28px;
+
+      pointer-events: none;
     }
 
     #title {
-      font-size: 34px;
+      font-size: 38px;
       font-weight: bold;
 
       color: #4CAF50;
 
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     }
 
     #name {
-      font-size: 56px;
+      font-size: 62px;
       font-weight: bold;
 
-      margin-bottom: 20px;
+      margin-bottom: 14px;
     }
 
     #subtitle {
-      font-size: 24px;
+      font-size: 25px;
 
       color: #cccccc;
 
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     #debug {
-      font-size: 16px;
+      font-size: 17px;
 
       color: #777;
 
@@ -474,32 +566,58 @@ function playSound(type) {
       word-break: break-word;
     }
 
-  /* 
- * Визуальная рамка сканирования.
- * Она не влияет на сам scanner,
- * а только показывает ученику, куда примерно держать QR.
- */
-.scan-frame {
-  position: fixed;
+    /* Блок сообщения после check-in */
+    .result-message-box {
+      display: none;
 
-  /* Ставим рамку строго по центру экрана */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+      margin-top: 22px;
 
-  width: 360px;
-  height: 360px;
+      width: min(520px, 86vw);
 
-  border: 3px solid rgba(255,255,255,0.28);
-  border-radius: 22px;
+      background: rgba(0, 0, 0, 0.55);
 
-  box-shadow: 0 0 40px rgba(33,150,243,0.35);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
 
-  z-index: 5;
+      padding: 20px 22px;
 
-  /* Чтобы рамка не мешала нажатию на экран */
-  pointer-events: none;
-}
+      box-shadow: 0 0 24px rgba(0,0,0,0.35);
+    }
+
+    #resultMessageLabel {
+      font-size: 20px;
+      font-weight: bold;
+
+      margin-bottom: 10px;
+
+      color: #ffffff;
+    }
+
+    #resultMessageText {
+      font-size: 25px;
+      font-weight: bold;
+      line-height: 1.35;
+
+      color: #ffffff;
+    }
+
+    /* В режиме результата рамку прячем */
+    .mode-result .scan-frame {
+      display: none;
+    }
+
+    .mode-result .logo {
+      margin-bottom: 22px;
+    }
+
+    .mode-result #title {
+      font-size: 34px;
+      margin-bottom: 16px;
+    }
+
+    .mode-result #name {
+      font-size: 64px;
+    }
 
     /* Маленькая подсказка про звук */
     #soundHint {
@@ -516,11 +634,86 @@ function playSound(type) {
       z-index: 20;
     }
 
-    @media (orientation: landscape) {
+    /* Горизонтальный экран: результат слева, сообщение справа */
+    @media (orientation: landscape) and (min-width: 800px) {
+
+      .screen {
+        padding-top: 22px;
+      }
 
       .logo {
-        font-size: 42px;
-        margin-bottom: 20px;
+        margin-bottom: 18px;
+      }
+
+      .logo img {
+        width: min(330px, 36vw);
+        max-height: 100px;
+      }
+
+      .scan-frame {
+        width: 320px;
+        height: 320px;
+      }
+
+      .mode-result .ready-zone {
+        width: min(900px, 92vw);
+
+        display: grid;
+        grid-template-columns: 1fr 1.15fr;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .mode-result .result-main {
+        text-align: left;
+
+        background: rgba(0,0,0,0.48);
+
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 22px;
+
+        padding: 26px 28px;
+      }
+
+      .mode-result .result-message-box {
+        display: block;
+
+        width: auto;
+        margin-top: 0;
+      }
+
+      .mode-result #title {
+        font-size: 30px;
+      }
+
+      .mode-result #name {
+        font-size: 54px;
+      }
+
+      .mode-result #subtitle {
+        font-size: 22px;
+      }
+
+      .mode-result #resultMessageText {
+        font-size: 26px;
+      }
+    }
+
+    /* Низкий горизонтальный экран */
+    @media (orientation: landscape) and (max-height: 620px) {
+
+      .screen {
+        padding-top: 16px;
+      }
+
+      .logo img {
+        width: min(280px, 34vw);
+      }
+
+      .scan-frame {
+        width: 260px;
+        height: 260px;
+        margin-bottom: 16px;
       }
 
       #title {
@@ -528,17 +721,11 @@ function playSound(type) {
       }
 
       #name {
-        font-size: 44px;
+        font-size: 46px;
       }
 
       #subtitle {
-        font-size: 22px;
-      }
-
-    /* В горизонтальном режиме рамка меньше, но всё равно по центру */
-     .scan-frame {
-       width: 320px;
-       height: 320px;
+        font-size: 20px;
       }
     }
 
@@ -550,27 +737,44 @@ function playSound(type) {
   <!-- Камера -->
   <video id="camera" muted playsinline></video>
 
-  <!-- Видимая рамка сканирования -->
-  <div class="scan-frame"></div>
-
   <!-- Основной экран -->
-  <div class="screen">
+  <div id="screen" class="screen mode-ready">
 
+    <!-- Логотип AXIS сверху -->
     <div class="logo">
-      AXIS JIU-JITSU
+      <img src="axis-logo.png" alt="AXIS JIU-JITSU">
     </div>
 
-    <div id="title">
-      Kamera startet...
+    <!-- Ready / Result зона -->
+    <div class="ready-zone">
+
+      <!-- Рамка сканирования -->
+      <div class="scan-frame"></div>
+
+      <!-- Основной текст результата или ready-экрана -->
+      <div class="result-main">
+
+        <div id="title">
+          Kamera startet...
+        </div>
+
+        <div id="name"></div>
+
+        <div id="subtitle">
+          Bitte warten
+        </div>
+
+        <div id="debug"></div>
+
+      </div>
+
+      <!-- Совет / Challenge после check-in -->
+      <div id="resultMessageBox" class="result-message-box">
+        <div id="resultMessageLabel"></div>
+        <div id="resultMessageText"></div>
+      </div>
+
     </div>
-
-    <div id="name"></div>
-
-    <div id="subtitle">
-      Bitte warten
-    </div>
-
-    <div id="debug"></div>
 
   </div>
 
