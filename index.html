@@ -202,7 +202,11 @@
   title.style.color = data.color || "#4CAF50";
 
   nameBox.innerText = data.vorname || "";
+  if (data.trainingName) {
+  subtitle.innerText = "Welcome to " + data.trainingName + ".";
+} else {
   subtitle.innerText = data.subtitle || "";
+}
   debug.innerText = data.memberId || "Kamera aktiv";
 
   // Показываем только само сообщение.
