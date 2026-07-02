@@ -201,14 +201,20 @@
   title.innerText = data.title || "Check-In";
   title.style.color = data.color || "#4CAF50";
 
-  if (
-  result === "success" ||
-  result === "duplicate"
-  ) {
+const titleText = data.title || "";
+
+const isNextCheckinScreen =
+  titleText.indexOf("Der nächste Check-In") !== -1 ||
+  titleText.indexOf("Kein Check-In möglich") !== -1;
+
+if (
+  (result === "success" || result === "duplicate") &&
+  !isNextCheckinScreen
+) {
   nameBox.innerText = data.vorname || "";
-  } else {
+} else {
   nameBox.innerText = "";
-  }
+}
 
   // Success bleibt deutsch und nutzt den Trainingsnamen.
   // Bei duplicate/error wird NICHT automatisch "Willkommen" angezeigt.
