@@ -595,12 +595,19 @@ if (
 }
 
 #resultMessageText {
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 500;
-  line-height: 1.38;
+  line-height: 1.4;
 
-  color: #e2e2e2;
+  color: #dddddd;
   letter-spacing: 0.1px;
+
+  white-space: pre-line;
+}
+
+#resultMessageText::first-line {
+  color: #58d26a;
+  font-weight: 700;
 }
     /* В режиме результата рамку прячем */
     .mode-result .scan-frame {
