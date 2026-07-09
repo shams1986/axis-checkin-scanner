@@ -21,8 +21,11 @@
     const WEB_APP_URL =
       "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZINd5x2tX6DD6iv6AtDOwcxSDgmYHq0jjjKytEDLOxBfGezJiKw/exec";
 
-    // Через сколько секунд вернуться к Ready экрану
-    const RESET_DELAY_MS = 7000;
+   // Wie lange die verschiedenen Screens sichtbar bleiben
+    const SUCCESS_RESET_DELAY_MS = 9000;
+    const DUPLICATE_RESET_DELAY_MS = 3500;
+    const ERROR_RESET_DELAY_MS = 5000;
+    const NEXT_CHECKIN_RESET_DELAY_MS = 5000;
 
     // Защита от повторного срабатывания одного QR
     let scanLocked = false;
@@ -281,10 +284,24 @@ function showResult(data) {
   playSound(data.sound);
   vibrate(data.sound);
 
-  setTimeout(function () {
-    scanLocked = false;
-    setReadyScreen();
-  }, RESET_DELAY_MS);
+ let resetDelay = SUCCESS_RESET_DELAY_MS;
+
+if (result === "duplicate") {
+  if (isNextCheckinScreen) {
+    resetDelay = NEXT_CHECKIN_RESET_DELAY_MS;
+  } else {
+    resetDelay = DUPLICATE_RESET_DELAY_MS;
+  }
+}
+
+if (result === "not_found" || result === "error" || result === "invalid") {
+  resetDelay = ERROR_RESET_DELAY_MS;
+}
+
+setTimeout(function () {
+  scanLocked = false;
+  setReadyScreen();
+}, resetDelay);
 }
 
 
