@@ -1,0 +1,19 @@
+{
+  "name": "AXIS Check-In",
+  "short_name": "AXIS Check-In",
+  "description": "AXIS Jiu-Jitsu Check-In Scanner",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "axis-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
