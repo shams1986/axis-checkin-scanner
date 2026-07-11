@@ -10,7 +10,7 @@
   "theme_color": "#050505",
   "icons": [
     {
-      "src": "axis-logo.png",
+      "src": "axis-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
