@@ -8,6 +8,15 @@
 
   <title>AXIS Check-In Scanner</title>
 
+  <link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#050505">
+
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<meta name="apple-mobile-web-app-title" content="AXIS Check-In">
+
   <!-- Nimiq QR Scanner -->
   <script type="module">
 
@@ -490,6 +499,12 @@ setTimeout(function () {
 
     // Scanner starten, sobald die Seite geladen ist
     window.addEventListener("DOMContentLoaded", startScanner);
+
+    if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function() {
+    navigator.serviceWorker.register("service-worker.js");
+      });
+    }
 
   </script>
 
