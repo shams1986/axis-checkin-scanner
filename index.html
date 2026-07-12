@@ -177,6 +177,7 @@
      * Возвращает экран в режим ожидания.
      */
     function setReadyScreen() {
+      document.body.classList.remove("result-screen");
 
       app.className = "screen mode-ready";
 
@@ -212,6 +213,7 @@
      * тогда scanner page просто покажет их.
      */
 function showResult(data) {
+  document.body.classList.add("result-screen");
 
   const result = data.result || "success";
 
@@ -538,6 +540,10 @@ setTimeout(function () {
       opacity: 0.08;
 
       z-index: 1;
+    }
+
+    body.result-screen #camera {
+      opacity: 0.02;
     }
 
     /* Основной экран */
