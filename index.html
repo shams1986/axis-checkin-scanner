@@ -526,44 +526,60 @@ setTimeout(function () {
     }
 
 
-    .checkin-reminder {
+ .checkin-reminder {
   position: fixed;
   top: 22px;
   right: 22px;
 
-  z-index: 50;
+  z-index: 999999;
 
-  padding: 10px 16px;
+  padding: 16px 28px;
 
-  border: 1px solid rgba(210, 35, 45, 0.9);
-  border-radius: 14px;
-
-  background: rgba(210, 35, 45, 0.18);
+  background: #ff1f2d;
   color: #ffffff;
 
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 1.4px;
+  border: 2px solid rgba(255,255,255,0.95);
+  border-radius: 18px;
 
-  box-shadow: 0 0 18px rgba(210, 35, 45, 0.55);
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 1.8px;
 
-  animation: checkinBlink 1.2s infinite;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.55);
+
+  box-shadow:
+    0 0 22px rgba(255, 31, 45, 0.95),
+    0 0 46px rgba(255, 31, 45, 0.75);
+
+  animation: checkinBlink 1s infinite;
 }
 
 @keyframes checkinBlink {
   0% {
     opacity: 1;
-    box-shadow: 0 0 22px rgba(210, 35, 45, 0.75);
+    transform: scale(1);
+    background: #ff1f2d;
+    box-shadow:
+      0 0 22px rgba(255, 31, 45, 0.95),
+      0 0 46px rgba(255, 31, 45, 0.75);
   }
 
   50% {
-    opacity: 0.35;
-    box-shadow: 0 0 6px rgba(210, 35, 45, 0.25);
+    opacity: 0.55;
+    transform: scale(1.06);
+    background: #b80012;
+    box-shadow:
+      0 0 8px rgba(255, 31, 45, 0.45),
+      0 0 18px rgba(255, 31, 45, 0.35);
   }
 
   100% {
     opacity: 1;
-    box-shadow: 0 0 22px rgba(210, 35, 45, 0.75);
+    transform: scale(1);
+    background: #ff1f2d;
+    box-shadow:
+      0 0 22px rgba(255, 31, 45, 0.95),
+      0 0 46px rgba(255, 31, 45, 0.75);
   }
 }
     
