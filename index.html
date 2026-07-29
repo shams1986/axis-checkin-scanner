@@ -36,6 +36,60 @@
     const ERROR_RESET_DELAY_MS = 5000;
     const NEXT_CHECKIN_RESET_DELAY_MS = 5000;
 
+    const CHECKIN_REMINDER_WINDOWS = [
+  { day: 1, start: "18:00" }, // Monday Gi
+  { day: 1, start: "19:30" }, // Monday No-Gi
+
+  { day: 2, start: "16:45" }, // Tuesday Kinder
+  { day: 2, start: "18:00" }, // Tuesday Gi
+
+  { day: 3, start: "18:00" }, // Wednesday No-Gi
+  { day: 3, start: "19:30" }, // Wednesday Gi
+
+  { day: 4, start: "16:45" }, // Thursday Kinder
+  { day: 4, start: "18:00" }, // Thursday No-Gi Sparring
+
+  { day: 5, start: "18:00" }, // Friday Wrestling
+  { day: 5, start: "19:30" }  // Friday Gi Sparring
+];
+
+function timeToMinutes(timeValue) {
+  const parts = String(timeValue).split(":");
+  return Number(parts[0]) * 60 + Number(parts[1]);
+}
+
+function isCheckinWindowOpenNow() {
+  const now = new Date();
+  const currentDay = now.getDay(); // Sunday 0, Monday 1, ...
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  return CHECKIN_REMINDER_WINDOWS.some(function(training) {
+    if (training.day !== currentDay) return false;
+
+    const trainingStart = timeToMinutes(training.start);
+    const checkinOpen = trainingStart - 30;
+    const checkinClose = trainingStart + 30;
+
+    return currentMinutes >= checkinOpen && currentMinutes <= checkinClose;
+  });
+}
+
+function updateCheckinReminder() {
+  const reminder = document.getElementById("checkinReminder");
+  const screen = document.getElementById("screen");
+
+  if (!reminder || !screen) return;
+
+  const isReadyScreen = screen.classList.contains("mode-ready");
+  const isOpenNow = isCheckinWindowOpenNow();
+
+  if (isReadyScreen && isOpenNow) {
+    reminder.classList.remove("is-hidden");
+  } else {
+    reminder.classList.add("is-hidden");
+  }
+}
+
     // Защита от повторного срабатывания одного QR
     let scanLocked = false;
 
@@ -191,6 +245,8 @@
       resultMessageBox.style.display = "none";
       resultMessageLabel.innerText = "";
       resultMessageText.innerText = "";
+
+      updateCheckinReminder();
     }
 
 
@@ -213,6 +269,12 @@
      * тогда scanner page просто покажет их.
      */
 function showResult(data) {
+  
+  const reminder = document.getElementById("checkinReminder");
+    if (reminder) {
+      reminder.classList.add("is-hidden");
+    }
+  
   document.body.classList.add("result-screen");
 
   const result = data.result || "success";
@@ -502,8 +564,11 @@ setTimeout(function () {
     // Scanner starten, sobald die Seite geladen ist
     window.addEventListener("DOMContentLoaded", startScanner);
 
+    setInterval(updateCheckinReminder, 30000);
+      window.addEventListener("load", updateCheckinReminder);
+
     if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function() {
+      window.addEventListener("load", function() {
     navigator.serviceWorker.register("service-worker.js");
       });
     }
@@ -582,6 +647,14 @@ setTimeout(function () {
       0 0 46px rgba(255, 31, 45, 0.75);
   }
 }
+
+    .checkin-reminder.is-hidden {
+      display: none;
+    }
+
+    .checkin-reminder.is-hidden {
+      display: none;
+    }
     
     /* Камера работает на фоне */
     #camera {
