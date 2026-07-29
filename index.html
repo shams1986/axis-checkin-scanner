@@ -525,6 +525,48 @@ setTimeout(function () {
       text-align: center;
     }
 
+
+    .checkin-reminder {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+
+  z-index: 50;
+
+  padding: 10px 16px;
+
+  border: 1px solid rgba(210, 35, 45, 0.9);
+  border-radius: 14px;
+
+  background: rgba(210, 35, 45, 0.18);
+  color: #ffffff;
+
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+
+  box-shadow: 0 0 18px rgba(210, 35, 45, 0.55);
+
+  animation: checkinBlink 1.2s infinite;
+}
+
+@keyframes checkinBlink {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 22px rgba(210, 35, 45, 0.75);
+  }
+
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 6px rgba(210, 35, 45, 0.25);
+  }
+
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 22px rgba(210, 35, 45, 0.75);
+  }
+}
+    
     /* Камера работает на фоне */
     #camera {
       position: fixed;
@@ -835,6 +877,10 @@ setTimeout(function () {
 
   <!-- Камера -->
   <video id="camera" muted playsinline></video>
+
+  <div id="checkinReminder" class="checkin-reminder">
+  CHECK-IN
+  </div>
 
   <!-- Основной экран -->
   <div id="screen" class="screen mode-ready">
