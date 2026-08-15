@@ -1,4 +1,8 @@
 /************************************
+ * Managed from this repository and deployed to Google Apps Script with clasp.
+ ************************************/
+
+/************************************
  * AXIS CHECK-IN SYSTEM
  *
  * Основные части:
@@ -4207,6 +4211,3 @@ function memberCardExists(folder, memberId) {
 
   return false;
 }
-
-
-
