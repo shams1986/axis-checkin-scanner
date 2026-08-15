@@ -1,8 +1,8 @@
-# Gym Check-in Template v2 — Product Plan
+# Gym Check-in System Template — Product Plan
 
 ## Product direction
 
-Gym Check-in Template v2 should turn the working AXIS Check-in system into a reusable, client-ready product for a single gym. It should preserve the proven scanner experience and lightweight Google-based architecture while moving gym-specific values into configuration and giving the owner a simple admin interface.
+Gym Check-in System Template should turn the working AXIS Check-in system into a reusable, client-ready product for a single gym. It should preserve the proven scanner experience and lightweight Google-based architecture while moving gym-specific values into configuration and giving the owner a simple admin interface.
 
 The template should be adaptable by changing the gym name, logo, colors, schedule, training types, member data, QR card design, timezone, and basic messages. It is not intended to become a broad gym-management platform or multi-tenant SaaS product.
 
@@ -28,9 +28,9 @@ The current system already provides a complete working check-in path:
 
 Today, the owner experience is primarily based on raw Google Sheets and manually run Apps Script functions. Branding, frontend reminder times, URLs, sheet names, message logic, and card details contain AXIS-specific assumptions.
 
-One important v2 gap is active-status enforcement: the current card batch checks member status, but the main fast check-in lookup does not clearly reject inactive members. V2 should make status validation part of the primary check-in transaction.
+One important template gap is active-status enforcement: the current AXIS card batch checks member status, but the main fast check-in lookup does not clearly reject inactive members. The template should make status validation part of the primary check-in transaction.
 
-## 2. What v2 should reuse
+## 2. What the template should reuse
 
 Reuse the working behavior and interaction patterns rather than replacing them:
 
@@ -42,7 +42,7 @@ Reuse the working behavior and interaction patterns rather than replacing them:
 - Post-check-in welcome or motivational messages.
 - Schedule-based check-in windows.
 - Duplicate protection tied to a specific training session.
-- Active/inactive member concept, with stronger enforcement in v2.
+- Active/inactive member concept, with stronger enforcement in the template.
 - Compact QR payload based on a member ID or similarly safe identifier.
 - Branded QR/member card generation.
 - Apps Script and Google Sheets for a single-gym installation.
@@ -84,7 +84,7 @@ Do not copy these directly into every client instance:
 - Multiple legacy check-in implementations with different duplicate rules.
 - Repeated helpers and compatibility functions not required by a new installation.
 
-For v2, use stable machine-readable response states such as `success`, `duplicate`, `not_found`, `inactive`, `outside_window`, and `error`. Display text should come from configuration rather than control frontend behavior.
+For the template, use stable machine-readable response states such as `success`, `duplicate`, `not_found`, `inactive`, `outside_window`, and `error`. Display text should come from configuration rather than control frontend behavior.
 
 Advanced message rotation may remain an optional module for clients who want it. The default MVP should use a small message list with optional training-type targeting.
 
@@ -180,7 +180,7 @@ Admin authentication must be decided in Phase 1 and implemented before write act
 
 ## 6. Scanner app
 
-The v2 scanner keeps the AXIS full-screen landscape flow. It accepts a normalized QR payload, locks after the first read, and renders states from `result` rather than inspecting translated titles.
+The template scanner keeps the AXIS full-screen landscape flow. It accepts a normalized QR payload, locks after the first read, and renders states from `result` rather than inspecting translated titles.
 
 | State | Trigger | Display | Reset behavior |
 |---|---|---|---|
@@ -311,11 +311,11 @@ Use simple filters, counts, and tables. Do not add predictive analytics, complex
 6. Save the output to a configured Drive folder and expose a view/download link.
 7. Allow regeneration after a branding or member-name change.
 
-The AXIS Slides-based generator is a useful baseline, but v2 should remove fixed member IDs, fixed folder/template values, random design assumptions, and AXIS text. Prefer one predictable default template with an optional alternate design. Card generation failures should not affect check-in availability.
+The AXIS Slides-based generator is a useful baseline, but the reusable template should remove fixed member IDs, fixed folder/template values, random design assumptions, and AXIS text. Prefer one predictable default template with an optional alternate design. Card generation failures should not affect check-in availability.
 
 ## 12. MVP scope
 
-The first buildable v2 should include:
+The first buildable template MVP should include:
 
 - A reusable branded tablet scanner.
 - A reusable Apps Script check-in backend.
@@ -351,9 +351,9 @@ Explicitly exclude:
 
 Each phase is a separately reviewable implementation task. Complete its acceptance criteria before starting the next phase; do not modify AXIS production to make the template cleaner.
 
-### Phase 1 — Create v2 template repo structure and config model
+### Phase 1 — Create template repo structure and config model
 
-- **Goal:** establish a separate v2 workspace and freeze the contracts before runtime implementation.
+- **Goal:** establish a separate template workspace and freeze the contracts before runtime implementation.
 - **Deliverables:** agreed directory layout; `gym.config.example` schema covering identity, branding, scanner behavior, check-in defaults, integration IDs, and card settings; scanner response schema; admin authentication decision; demo-gym values; deployment/rollback notes.
 - **Likely files:** template `README.md`, `AGENTS.md`, `DEPLOYMENT.md`, `docs/API_CONTRACT.md`, `docs/CONFIG.md`, `scanner/config.example.js` or equivalent, and empty `scanner/`/`apps-script/` structure.
 - **Acceptance criteria:** two sample gym configurations validate against the same schema; no AXIS URL/name/asset is required by core config; public versus protected settings are explicitly listed; each scanner result has a documented payload example.
@@ -369,23 +369,23 @@ Each phase is a separately reviewable implementation task. Complete its acceptan
 - **Manual tests:** run setup twice; add one demo member/session; confirm dropdowns/protections; confirm owner cannot accidentally edit `_Raw_Attendance` through normal use; verify timezone formatting.
 - **Must not change:** scanner behavior, check-in API, card generator, or AXIS spreadsheet.
 
-### Phase 3 — Adapt AXIS scanner into reusable scanner v2
+### Phase 3 — Adapt AXIS scanner into the reusable template scanner
 
 - **Goal:** retain the AXIS kiosk UX while removing hardcoded gym identity and state inference.
 - **Deliverables:** configurable branding/text/timing; configurable endpoint; generalized QR payload validation; exact states from Section 6; public-config loading with safe fallback; preserved 20-second timeout and cleanup.
 - **Likely files:** `scanner/index.html`, `scanner/styles.css`, `scanner/app.js`, `scanner/config.js`, `scanner/manifest.json`, scanner assets, and scanner-focused tests/fixtures.
 - **Acceptance criteria:** switching config changes gym name/logo/colors/text without core edits; all nine states render from fixtures; no state depends on German title substrings; layout works on target landscape tablet and low-height viewport.
 - **Manual tests:** camera allowed/denied; raw and URL QR payloads; each mocked result; sound unlock; timeout; late callback; automatic reset; refresh/install as PWA.
-- **Must not change:** v2 backend logic beyond response fixtures, AXIS frontend, admin panel, or Sheets schema.
+- **Must not change:** template backend logic beyond response fixtures, AXIS frontend, admin panel, or Sheets schema.
 
-### Phase 4 — Implement v2 check-in backend contract
+### Phase 4 — Implement the template check-in backend contract
 
 - **Goal:** implement one fast, consistent check-in transaction using the Phase 2 schema.
 - **Deliverables:** public route to `checkIn()`; safe callback handling if JSONP remains; member normalization; active-status validation; authoritative schedule resolver; training-key duplicate prevention; short lock/recheck/write transaction; stable response factory; bounded error logging.
 - **Likely files:** `apps-script/WebApp.gs`, `apps-script/CheckInService.gs`, `apps-script/ScheduleService.gs`, `apps-script/MemberRepository.gs`, `apps-script/AttendanceRepository.gs`, `apps-script/ResponseFactory.gs`, and test fixtures.
 - **Acceptance criteria:** outputs match every Section 6 contract; one success creates exactly one raw attendance row and state update; inactive/unknown/outside-window requests write no attendance; simultaneous identical requests create at most one event; display language does not control logic.
 - **Manual tests:** boundary at open/close minute; matching/nonmatching category; active/inactive/unknown member; first scan/duplicate scan; concurrent requests; missing sheet; malformed callback; scanner timeout against delayed/no response.
-- **Must not change:** admin UI, card generation, reports, AXIS production functions, or response fields already frozen for v2.
+- **Must not change:** admin UI, card generation, reports, AXIS production functions, or response fields already frozen for the template.
 
 ### Phase 5 — Build owner/admin panel MVP
 
@@ -435,7 +435,7 @@ Each phase is a separately reviewable implementation task. Complete its acceptan
 ## Product guardrails
 
 - Treat the existing AXIS production system as a working reference, not a cleanup target.
-- Build v2 separately and migrate behavior deliberately.
+- Build the template separately and migrate behavior deliberately.
 - Prefer configuration over forks with scattered hardcoded edits.
 - Keep the public scanner fast and the owner interface simple.
 - Hide technical state without making support or recovery impossible.
