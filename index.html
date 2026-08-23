@@ -237,11 +237,11 @@ function updateCheckinReminder() {
       app.className = "screen mode-ready";
 
       title.innerText = "Mitgliedskarte scannen";
-      title.style.color = "#d2232d";
+      title.style.color = "#4CAF50";
 
       nameBox.innerText = "";
       subtitle.innerText = "QR-Code in den Rahmen halten";
-      debug.innerText = "● Kamera aktiv";
+      debug.innerText = "";
 
       resultMessageBox.style.display = "none";
       resultMessageLabel.innerText = "";
@@ -527,7 +527,7 @@ setTimeout(function () {
       app.className = "screen mode-loading";
 
       title.innerText = "Check-in läuft";
-      title.style.color = "#d2232d";
+      title.style.color = "#2196F3";
       nameBox.innerText = "";
       subtitle.innerText = "Bitte warten";
       debug.innerText = "";
@@ -744,6 +744,7 @@ setTimeout(function () {
 
     /* Рамка сканирования */
     .scan-frame {
+      --scan-accent: #4CAF50;
       position: relative;
       width: min(42vh, 22rem, 70vw);
       aspect-ratio: 1;
@@ -759,9 +760,9 @@ setTimeout(function () {
       position: absolute;
       width: 3.4rem;
       height: 3.4rem;
-      border-color: #d2232d;
+      border-color: var(--scan-accent);
       border-style: solid;
-      filter: drop-shadow(0 0 0.55rem #d2232d);
+      filter: drop-shadow(0 0 0.55rem var(--scan-accent));
     }
 
     .scan-frame__corner--tl { top: 1rem; left: 1rem; border-width: 4px 0 0 4px; border-radius: 0.8rem 0 0; }
@@ -774,8 +775,8 @@ setTimeout(function () {
       right: 1.5rem;
       left: 1.5rem;
       height: 2px;
-      background: linear-gradient(90deg, transparent, #d2232d, transparent);
-      box-shadow: 0 0 1rem #d2232d;
+      background: linear-gradient(90deg, transparent, var(--scan-accent), transparent);
+      box-shadow: 0 0 1rem var(--scan-accent);
       animation: scan-line 2.3s ease-in-out infinite;
     }
 
@@ -808,6 +809,7 @@ setTimeout(function () {
     }
 
     .mode-loading .scan-frame {
+      --scan-accent: #2196F3;
       opacity: 0.5;
       margin-bottom: 0;
     }
@@ -820,7 +822,7 @@ setTimeout(function () {
       position: absolute;
       width: min(30rem, 80vw);
       padding: 1.25rem 1.5rem;
-      border: 1px solid rgb(210 35 45 / 48%);
+      border: 1px solid rgb(33 150 243 / 48%);
       border-radius: 1.25rem;
       background: linear-gradient(145deg, rgb(7 18 23 / 92%), rgb(5 13 17 / 82%));
       box-shadow: 0 2rem 6rem rgb(0 0 0 / 44%), inset 0 1px 0 rgb(255 255 255 / 8%);
@@ -834,8 +836,8 @@ setTimeout(function () {
       height: 0.8rem;
       margin: 0 auto 1rem;
       border-radius: 50%;
-      background: #d2232d;
-      box-shadow: 0 0 1.4rem #d2232d;
+      background: #2196F3;
+      box-shadow: 0 0 1.4rem #2196F3;
     }
 
     .mode-loading .result-card__mark {
