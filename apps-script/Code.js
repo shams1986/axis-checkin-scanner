@@ -26,9 +26,25 @@ const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby_D4IOfvuZbyheCOxZ
 const SCANNER_PAGE_URL = "https://shams1986.github.io/axis-checkin-scanner/";
 
 // Cache for stable sheets in seconds.
-// This makes scanner faster, but changes in Mitglieder / Checkin_Content
+// This makes scanner faster, but changes in Mitglieder / Checkin_Content /
+// Training_Schedule
 // may take up to this many seconds to appear unless clearFastCheckinCache() is run.
-const FAST_CACHE_SECONDS = 60;
+const FAST_CACHE_SECONDS = 6 * 60 * 60;
+
+const FAST_CACHE_SHEET_NAMES = [
+  "Mitglieder",
+  "Checkin_Content",
+  "Training_Schedule"
+];
+
+const FAST_CACHE_HEADER_SHEET_NAMES = [
+  "Attendance"
+];
+
+const FAST_CACHE_ROW_INDEX_SHEET_NAMES = [
+  "Checkin_State",
+  "Checkin_Message_State"
+];
 
 
 
@@ -307,10 +323,11 @@ function createJsonpResponse(callback, data) {
  */
 function processFastCheckinApi(memberId) {
 
+  const startedAt = Date.now();
+  const timings = {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const attendanceSheet = ss.getSheetByName("Attendance");
-  const scheduleSheet = ss.getSheetByName("Training_Schedule");
 
   const nowDate = new Date();
 
@@ -322,11 +339,13 @@ function processFastCheckinApi(memberId) {
     );
   }
 
+  let phaseStartedAt = Date.now();
   const membersData = getSheetValuesCached(
     ss,
     "Mitglieder",
     FAST_CACHE_SECONDS
   );
+  timings.members = Date.now() - phaseStartedAt;
 
   if (!membersData || membersData.length < 2) {
     return buildFastApiErrorResponse(
@@ -360,9 +379,13 @@ function processFastCheckinApi(memberId) {
     };
   }
 
-  const scheduleData = scheduleSheet
-    ? scheduleSheet.getDataRange().getValues()
-    : [];
+  phaseStartedAt = Date.now();
+  const scheduleData = getSheetValuesCached(
+    ss,
+    "Training_Schedule",
+    FAST_CACHE_SECONDS
+  );
+  timings.schedule = Date.now() - phaseStartedAt;
 
   // Neue Logik: Check-In ist nur im Zeitfenster offen:
   // 30 Minuten vor Trainingsstart bis 30 Minuten nach Trainingsstart.
@@ -424,10 +447,11 @@ function processFastCheckinApi(memberId) {
     };
   }
 
-  const stateSheet = getOrCreateCheckinStateSheet(ss);
-  const stateData = stateSheet.getDataRange().getValues();
-
-  const state = getCheckinStateForMember(stateData, memberId);
+  phaseStartedAt = Date.now();
+  const stateSheet = ss.getSheetByName("Checkin_State") ||
+    getOrCreateCheckinStateSheet(ss);
+  const state = getCheckinStateForMemberIndexed(stateSheet, memberId);
+  timings.checkinState = Date.now() - phaseStartedAt;
   const previousAttendanceDate = state.lastCheckin;
 
   // Duplicate gilt nur für dieselbe konkrete Trainingseinheit.
@@ -468,13 +492,16 @@ function processFastCheckinApi(memberId) {
     nowDate
   );
 
+  phaseStartedAt = Date.now();
   const smartMessage = getFastSmartMessage(
     ss,
     member,
     missedTrainingDays,
     currentTraining
   );
+  timings.smartMessage = Date.now() - phaseStartedAt;
 
+  phaseStartedAt = Date.now();
   const newAttendanceRow = attendanceSheet.getLastRow() + 1;
 
   writeAttendanceRowByHeaders(attendanceSheet, newAttendanceRow, {
@@ -491,7 +518,9 @@ function processFastCheckinApi(memberId) {
     MessageCycleStatus: smartMessage.cycleStatus || "",
     SeenSuitableMessages: smartMessage.seenSuitableMessages || ""
   });
+  timings.attendanceWrite = Date.now() - phaseStartedAt;
 
+  phaseStartedAt = Date.now();
   updateCheckinState(
     stateSheet,
     state,
@@ -500,6 +529,10 @@ function processFastCheckinApi(memberId) {
     newAttendanceRow,
     currentTraining
   );
+  timings.checkinStateWrite = Date.now() - phaseStartedAt;
+  timings.total = Date.now() - startedAt;
+
+  logFastCheckinTimings("success", timings);
 
   return {
     result: "success",
@@ -553,6 +586,20 @@ function buildFastApiErrorResponse(memberId, title, subtitle) {
     trainingName: "",
     trainingAudience: ""
   };
+}
+
+
+function logFastCheckinTimings(result, timings) {
+
+  try {
+    console.log(JSON.stringify({
+      event: "fast_checkin_timing",
+      result: result,
+      timingsMs: timings
+    }));
+  } catch (error) {
+    // Monitoring darf den Check-in niemals beeinflussen.
+  }
 }
 
 
@@ -633,11 +680,12 @@ function getMemberProfileFastFromData(membersData, memberId) {
 /**
  * getSheetValuesCached(ss, sheetName, ttlSeconds)
  *
- * Читает лист с коротким cache.
+ * Читает редко меняющийся лист через cache до 6 часов.
  *
  * Используем только для листов, которые не меняются каждую секунду:
  * - Mitglieder
  * - Checkin_Content
+ * - Training_Schedule
  *
  * Attendance НЕ кэшируем.
  * Checkin_State НЕ кэшируем.
@@ -645,7 +693,7 @@ function getMemberProfileFastFromData(membersData, memberId) {
 function getSheetValuesCached(ss, sheetName, ttlSeconds) {
 
   const cache = CacheService.getScriptCache();
-  const cacheKey = "AXIS_FAST_" + sheetName;
+  const cacheKey = getFastSheetCacheKey(sheetName);
 
   try {
     const cached = cache.get(cacheKey);
@@ -685,15 +733,160 @@ function getSheetValuesCached(ss, sheetName, ttlSeconds) {
  * Запусти вручную, если только что сильно менял:
  * - Mitglieder
  * - Checkin_Content
+ * - Training_Schedule
  *
- * Обычно можно просто подождать FAST_CACHE_SECONDS секунд.
+ * После ручных изменений этих листов функцию можно запустить вручную.
  */
 function clearFastCheckinCache() {
 
   const cache = CacheService.getScriptCache();
 
-  cache.remove("AXIS_FAST_Mitglieder");
-  cache.remove("AXIS_FAST_Checkin_Content");
+  FAST_CACHE_SHEET_NAMES.forEach(function(sheetName) {
+    cache.remove(getFastSheetCacheKey(sheetName));
+  });
+
+  FAST_CACHE_HEADER_SHEET_NAMES.forEach(function(sheetName) {
+    cache.remove(getFastHeaderCacheKey(sheetName));
+  });
+
+  FAST_CACHE_ROW_INDEX_SHEET_NAMES.forEach(function(sheetName) {
+    cache.remove(getFastRowIndexCacheKey(sheetName));
+  });
+}
+
+
+function getFastSheetCacheKey(sheetName) {
+  return "AXIS_FAST_" + sheetName;
+}
+
+
+function getFastHeaderCacheKey(sheetName) {
+  return "AXIS_FAST_HEADERS_" + sheetName;
+}
+
+
+function getFastRowIndexCacheKey(sheetName) {
+  return "AXIS_FAST_ROW_INDEX_" + sheetName;
+}
+
+
+/**
+ * getMemberRowByCachedIndex(sheet, memberId, columnCount)
+ *
+ * Der Cache speichert nur Zeilennummern. Vor jeder Verwendung wird geprüft,
+ * ob die gefundene Zeile weiterhin zur angeforderten MemberID gehört. Bei
+ * Sortierungen, eingefügten Zeilen oder einem Cache-Miss wird der Index aus
+ * Spalte A neu aufgebaut.
+ */
+function getMemberRowByCachedIndex(sheet, memberId, columnCount) {
+
+  const normalizedMemberId = String(memberId);
+  const cachedIndex = getCachedMemberRowIndex(sheet);
+  let rowIndex = cachedIndex.rowIndex;
+  let rowNumber = rowIndex[normalizedMemberId];
+
+  if (!rowNumber && cachedIndex.cacheHit) {
+    rowIndex = rebuildMemberRowIndex(sheet);
+    rowNumber = rowIndex[normalizedMemberId];
+  }
+
+  if (!rowNumber) {
+    return null;
+  }
+
+  let values = sheet
+    .getRange(rowNumber, 1, 1, columnCount)
+    .getValues()[0];
+
+  if (String(values[0]) !== normalizedMemberId) {
+    rowIndex = rebuildMemberRowIndex(sheet);
+    rowNumber = rowIndex[normalizedMemberId];
+
+    if (!rowNumber) {
+      return null;
+    }
+
+    values = sheet
+      .getRange(rowNumber, 1, 1, columnCount)
+      .getValues()[0];
+
+    if (String(values[0]) !== normalizedMemberId) {
+      invalidateMemberRowIndex(sheet);
+      return null;
+    }
+  }
+
+  return {
+    rowNumber: Number(rowNumber),
+    values: values
+  };
+}
+
+
+function getCachedMemberRowIndex(sheet) {
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = getFastRowIndexCacheKey(sheet.getName());
+
+  try {
+    const cached = cache.get(cacheKey);
+
+    if (cached) {
+      return {
+        rowIndex: JSON.parse(cached),
+        cacheHit: true
+      };
+    }
+  } catch (error) {
+    // Ein beschädigter oder zu großer Cache wird sicher neu aufgebaut.
+  }
+
+  return {
+    rowIndex: rebuildMemberRowIndex(sheet),
+    cacheHit: false
+  };
+}
+
+
+function rebuildMemberRowIndex(sheet) {
+
+  const lastRow = sheet.getLastRow();
+  const rowIndex = {};
+
+  if (lastRow >= 2) {
+    const memberIds = sheet
+      .getRange(2, 1, lastRow - 1, 1)
+      .getValues();
+
+    for (let i = 0; i < memberIds.length; i++) {
+      const memberId = memberIds[i][0];
+
+      if (memberId !== "" && memberId !== null) {
+        rowIndex[String(memberId)] = i + 2;
+      }
+    }
+  }
+
+  try {
+    CacheService
+      .getScriptCache()
+      .put(
+        getFastRowIndexCacheKey(sheet.getName()),
+        JSON.stringify(rowIndex),
+        FAST_CACHE_SECONDS
+      );
+  } catch (error) {
+    // Der Check-in funktioniert auch ohne gespeicherten Index weiter.
+  }
+
+  return rowIndex;
+}
+
+
+function invalidateMemberRowIndex(sheet) {
+  CacheService
+    .getScriptCache()
+    .remove(getFastRowIndexCacheKey(sheet.getName()));
 }
 
 
@@ -727,6 +920,7 @@ function getOrCreateCheckinStateSheet(ss) {
 
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    invalidateMemberRowIndex(sheet);
     return sheet;
   }
 
@@ -735,6 +929,7 @@ function getOrCreateCheckinStateSheet(ss) {
   for (let i = 0; i < headers.length; i++) {
     if (currentHeaders[i] !== headers[i]) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      invalidateMemberRowIndex(sheet);
       break;
     }
   }
@@ -809,6 +1004,44 @@ function getCheckinStateForMember(stateData, memberId) {
 
 
 /**
+ * getCheckinStateForMemberIndexed(sheet, memberId)
+ *
+ * Liest nur die Zustandszeile des aktuellen Mitglieds. Der Cache enthält
+ * ausschließlich MemberID → Zeilennummer, niemals aktuelle Check-in-Werte.
+ */
+function getCheckinStateForMemberIndexed(sheet, memberId) {
+
+  const indexedRow = getMemberRowByCachedIndex(sheet, memberId, 7);
+
+  if (!indexedRow) {
+    return {
+      found: false,
+      rowNumber: null,
+      lastCheckin: null,
+      lastAttendanceRow: null,
+      lastTrainingType: "",
+      lastTrainingName: "",
+      lastTrainingStart: "",
+      lastTrainingKey: ""
+    };
+  }
+
+  const row = indexedRow.values;
+
+  return {
+    found: true,
+    rowNumber: indexedRow.rowNumber,
+    lastCheckin: row[1] || null,
+    lastAttendanceRow: row[2] || null,
+    lastTrainingType: row[3] || "",
+    lastTrainingName: row[4] || "",
+    lastTrainingStart: row[5] || "",
+    lastTrainingKey: row[6] || ""
+  };
+}
+
+
+/**
  * updateCheckinState(...)
  *
  * Обновляет Checkin_State после успешного check-in.
@@ -856,6 +1089,8 @@ function updateCheckinState(
       currentTraining ? currentTraining.trainingStartText : "",
       currentTraining ? currentTraining.trainingKey : ""
     ]]);
+
+  invalidateMemberRowIndex(stateSheet);
 }
 
 
@@ -901,14 +1136,17 @@ function getFastSmartMessage(
     FAST_CACHE_SECONDS
   );
 
+  const messageStateSheet = ss.getSheetByName("Checkin_Message_State") ||
+    getOrCreateCheckinMessageStateSheet(ss);
+
   // Выбираем Checkin_Content так, чтобы ученику не повторялись сообщения,
   // пока он не увидит все подходящие для него сообщения.
   return getNonRepeatingCheckinContent(
-    ss,
     contentData,
     member,
     missedTrainingDays,
-    currentTraining
+    currentTraining,
+    messageStateSheet
   );
 }
 
@@ -1028,11 +1266,11 @@ function getRandomCheckinContentFastFromData(
  * через conditional formatting.
  */
 function getNonRepeatingCheckinContent(
-  ss,
   contentData,
   memberProfile,
   missedTrainingDays,
-  currentTraining
+  currentTraining,
+  messageStateSheet
 ) {
 
   // Сначала собираем все подходящие сообщения:
@@ -1065,10 +1303,8 @@ function getNonRepeatingCheckinContent(
 
   // Берём или создаём лист состояния сообщений.
   // Это быстрее и чище, чем каждый раз читать всю Attendance.
-  const messageStateSheet = getOrCreateCheckinMessageStateSheet(ss);
-  const messageStateData = messageStateSheet.getDataRange().getValues();
-  const messageState = getCheckinMessageStateForMember(
-    messageStateData,
+  const messageState = getCheckinMessageStateForMemberIndexed(
+    messageStateSheet,
     memberProfile.memberId
   );
 
@@ -1276,6 +1512,7 @@ function getOrCreateCheckinMessageStateSheet(ss) {
       "CycleRestartCount",
       "LastUpdate"
     ]]);
+    invalidateMemberRowIndex(sheet);
   }
 
   const firstCell = sheet.getRange(1, 1).getValue();
@@ -1288,6 +1525,7 @@ function getOrCreateCheckinMessageStateSheet(ss) {
       "CycleRestartCount",
       "LastUpdate"
     ]]);
+    invalidateMemberRowIndex(sheet);
   }
 
   return sheet;
@@ -1345,6 +1583,32 @@ function getCheckinMessageStateForMember(stateData, memberId) {
 }
 
 
+function getCheckinMessageStateForMemberIndexed(sheet, memberId) {
+
+  const indexedRow = getMemberRowByCachedIndex(sheet, memberId, 5);
+
+  if (!indexedRow) {
+    return {
+      found: false,
+      rowNumber: null,
+      seenContentIds: "",
+      lastCycleStatus: "",
+      cycleRestartCount: 0
+    };
+  }
+
+  const row = indexedRow.values;
+
+  return {
+    found: true,
+    rowNumber: indexedRow.rowNumber,
+    seenContentIds: row[1] || "",
+    lastCycleStatus: row[2] || "",
+    cycleRestartCount: Number(row[3]) || 0
+  };
+}
+
+
 /**
  * updateCheckinMessageState(...)
  *
@@ -1390,6 +1654,8 @@ function updateCheckinMessageState(
       cycleRestartCount,
       now
     ]]);
+
+  invalidateMemberRowIndex(sheet);
 }
 
 
@@ -1855,10 +2121,8 @@ function ensureAttendanceHeaderOrder(attendanceSheet) {
  */
 function writeAttendanceRowByHeaders(attendanceSheet, rowNumber, valuesByHeader) {
 
-  const headerMap = getHeaderMap(attendanceSheet);
-  const rowValues = attendanceSheet
-    .getRange(rowNumber, 1, 1, attendanceSheet.getLastColumn())
-    .getValues()[0];
+  const headerMap = getHeaderMapCached(attendanceSheet);
+  const rowValues = new Array(attendanceSheet.getLastColumn()).fill("");
 
   Object.keys(valuesByHeader).forEach(function(header) {
     const col = headerMap[header];
@@ -1871,6 +2135,33 @@ function writeAttendanceRowByHeaders(attendanceSheet, rowNumber, valuesByHeader)
   attendanceSheet
     .getRange(rowNumber, 1, 1, rowValues.length)
     .setValues([rowValues]);
+}
+
+
+function getHeaderMapCached(sheet) {
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = getFastHeaderCacheKey(sheet.getName());
+
+  try {
+    const cached = cache.get(cacheKey);
+
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (error) {
+    // Fallback auf den aktuellen Header des Sheets.
+  }
+
+  const headerMap = getHeaderMap(sheet);
+
+  try {
+    cache.put(cacheKey, JSON.stringify(headerMap), FAST_CACHE_SECONDS);
+  } catch (error) {
+    // Der Check-in bleibt ohne Header-Cache funktionsfähig.
+  }
+
+  return headerMap;
 }
 
 
@@ -2123,6 +2414,8 @@ function rebuildCheckinStateFromAttendance() {
   stateSheet
     .getRange(1, 1, rows.length, 7)
     .setValues(rows);
+
+  invalidateMemberRowIndex(stateSheet);
 
   Logger.log("Checkin_State rebuilt. Members: " + memberIds.length);
 }

@@ -26,6 +26,18 @@ git status
 
 Keep changes small and focused. Avoid changing Apps Script for frontend-only work, and preserve the existing public API response format when modifying the backend.
 
+## Fast check-in cache
+
+The Apps Script check-in path caches the infrequently changed `Mitglieder`,
+`Checkin_Content`, and `Training_Schedule` sheets for up to six hours. Current
+check-in state, message-cycle state, personal `ShowOnce` values, and attendance
+rows are always read from or written to Sheets and are not cached as values.
+
+After manually changing members, check-in content, or the training schedule,
+run `clearFastCheckinCache()` once in the Apps Script editor. The next scanner
+request reloads the current sheet data and rebuilds the cache. The same function
+also clears cached header and state-row indexes.
+
 Read [AGENTS.md](AGENTS.md) before working on the repository and [DEPLOYMENT.md](DEPLOYMENT.md) before deployment-related work. Do not push to GitHub or run `clasp push` without explicit approval.
 
 ## Production
