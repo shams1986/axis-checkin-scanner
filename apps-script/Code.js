@@ -95,6 +95,10 @@ function doGet(e) {
   // JSONP callback нужен, чтобы GitHub page могла получить ответ от Apps Script.
   const callback = e.parameter.callback || "callback";
 
+  // Optional correlation data used only for latency diagnostics.
+  const diagnosticId = String(e.parameter.diagnosticId || "").slice(0, 80);
+  const clientStartedAt = Number(e.parameter.clientStartedAt || 0);
+
   // Старый scannerMode оставляем для совместимости.
   const scannerMode = e.parameter.scanner === "1";
 
@@ -131,7 +135,11 @@ function doGet(e) {
     // - считает missedTrainingDays
     // - выбирает сообщение
     // - записывает Attendance сразу полной строкой
-    const responseData = processFastCheckinApi(memberId);
+    if (diagnosticId) {
+      logFastCheckinDiagnostic("request_started", diagnosticId, clientStartedAt, {});
+    }
+
+    const responseData = processFastCheckinApi(memberId, diagnosticId);
 
     // Возвращаем данные обратно на GitHub Scanner.
     return createJsonpResponse(callback, responseData);
@@ -321,7 +329,7 @@ function createJsonpResponse(callback, data) {
  * 7. Записывает Attendance сразу полной строкой.
  * 8. Обновляет Checkin_State.
  */
-function processFastCheckinApi(memberId) {
+function processFastCheckinApi(memberId, diagnosticId) {
 
   const startedAt = Date.now();
   const timings = {};
@@ -532,7 +540,7 @@ function processFastCheckinApi(memberId) {
   timings.checkinStateWrite = Date.now() - phaseStartedAt;
   timings.total = Date.now() - startedAt;
 
-  logFastCheckinTimings("success", timings);
+  logFastCheckinTimings("success", timings, diagnosticId);
 
   return {
     result: "success",
@@ -589,16 +597,37 @@ function buildFastApiErrorResponse(memberId, title, subtitle) {
 }
 
 
-function logFastCheckinTimings(result, timings) {
+function logFastCheckinTimings(result, timings, diagnosticId) {
 
   try {
     console.log(JSON.stringify({
       event: "fast_checkin_timing",
+      diagnosticId: diagnosticId || "",
       result: result,
       timingsMs: timings
     }));
   } catch (error) {
     // Monitoring darf den Check-in niemals beeinflussen.
+  }
+}
+
+
+function logFastCheckinDiagnostic(eventName, diagnosticId, clientStartedAt, details) {
+
+  try {
+    const serverStartedAt = Date.now();
+    console.log(JSON.stringify({
+      event: eventName,
+      diagnosticId: diagnosticId,
+      clientStartedAt: clientStartedAt || 0,
+      serverStartedAt: serverStartedAt,
+      clientToServerStartMs: clientStartedAt
+        ? Math.max(0, serverStartedAt - clientStartedAt)
+        : null,
+      details: details || {}
+    }));
+  } catch (error) {
+    // Monitoring must never affect check-in behavior.
   }
 }
 

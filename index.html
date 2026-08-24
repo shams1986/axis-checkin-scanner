@@ -424,6 +424,10 @@ setTimeout(function () {
      */
     function callCheckinApi(memberId) {
 
+      const requestStartedAt = Date.now();
+      const diagnosticId =
+        "axis_" + requestStartedAt + "_" + Math.floor(Math.random() * 10000);
+
       const callbackName =
         "axisCheckinCallback_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
 
@@ -444,6 +448,7 @@ setTimeout(function () {
       }
 
       function showConnectionError() {
+        recordCheckinDiagnostic("timeout_or_error");
         showResult({
           result: "error",
           memberId: memberId,
@@ -453,6 +458,28 @@ setTimeout(function () {
           color: "#F44336",
           sound: "error"
         });
+      }
+
+      function recordCheckinDiagnostic(outcome) {
+        const entry = {
+          diagnosticId: diagnosticId,
+          memberId: memberId,
+          outcome: outcome,
+          startedAt: new Date(requestStartedAt).toISOString(),
+          finishedAt: new Date().toISOString(),
+          totalMs: Date.now() - requestStartedAt
+        };
+
+        try {
+          const storageKey = "axisCheckinDiagnostics";
+          const entries = JSON.parse(localStorage.getItem(storageKey) || "[]");
+          entries.push(entry);
+          localStorage.setItem(storageKey, JSON.stringify(entries.slice(-20)));
+        } catch (error) {
+          // Diagnostics must never affect check-in behavior.
+        }
+
+        console.log("AXIS_CHECKIN_DIAGNOSTIC", JSON.stringify(entry));
       }
 
       function failRequest() {
@@ -474,6 +501,8 @@ setTimeout(function () {
         requestFinished = true;
         cleanupRequest();
 
+        recordCheckinDiagnostic(data && data.result ? data.result : "response");
+
         // Показываем результат на scanner page
         showResult(data);
       };
@@ -487,6 +516,8 @@ setTimeout(function () {
         "?api=checkin" +
         "&id=" + encodeURIComponent(memberId) +
         "&callback=" + encodeURIComponent(callbackName) +
+        "&diagnosticId=" + encodeURIComponent(diagnosticId) +
+        "&clientStartedAt=" + encodeURIComponent(requestStartedAt) +
         "&t=" + Date.now();
 
       document.body.appendChild(script);
