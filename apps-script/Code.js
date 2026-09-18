@@ -30,6 +30,8 @@ const SCANNER_PAGE_URL = "https://shams1986.github.io/axis-checkin-scanner/";
 // Training_Schedule
 // may take up to this many seconds to appear unless clearFastCheckinCache() is run.
 const FAST_CACHE_SECONDS = 6 * 60 * 60;
+// New timetable must not reuse a cached copy of the previous schedule.
+const FAST_SCHEDULE_CACHE_VERSION = "20260918";
 
 const FAST_CACHE_SHEET_NAMES = [
   "Mitglieder",
@@ -785,7 +787,11 @@ function clearFastCheckinCache() {
 
 
 function getFastSheetCacheKey(sheetName) {
-  return "AXIS_FAST_" + sheetName;
+  const version = sheetName === "Training_Schedule"
+    ? "_" + FAST_SCHEDULE_CACHE_VERSION
+    : "";
+
+  return "AXIS_FAST_" + sheetName + version;
 }
 
 

@@ -122,6 +122,11 @@ test("static sheet cache lasts six hours and is cleared explicitly", () => {
     }
   };
 
+  cache.put("AXIS_FAST_Training_Schedule", JSON.stringify([
+    ["Active", "TrainingType"],
+    [true, "Old schedule"]
+  ]), 21600);
+
   const first = context.getSheetValuesCached(ss, "Training_Schedule", 21600);
   schedule.values[1][1] = "No-Gi";
   const cached = context.getSheetValuesCached(ss, "Training_Schedule", 21600);
@@ -129,7 +134,7 @@ test("static sheet cache lasts six hours and is cleared explicitly", () => {
   assert.equal(first[1][1], "Gi");
   assert.equal(cached[1][1], "Gi");
   assert.equal(schedule.reads.length, 1);
-  assert.equal(cache.ttls.get("AXIS_FAST_Training_Schedule"), 21600);
+  assert.equal(cache.ttls.get("AXIS_FAST_Training_Schedule_20260918"), 21600);
 
   context.clearFastCheckinCache();
   const refreshed = context.getSheetValuesCached(ss, "Training_Schedule", 21600);
