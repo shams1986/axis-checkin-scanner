@@ -41,14 +41,16 @@
   { day: 1, start: "18:00" }, // Monday Gi
   { day: 1, start: "19:30" }, // Monday No-Gi
 
-  { day: 2, start: "16:45" }, // Tuesday Kinder
-  { day: 2, start: "18:00" }, // Tuesday Gi
+  { day: 2, start: "16:20", before: 20, after: 20 }, // Tuesday Kinder 5–8
+  { day: 2, start: "17:15", before: 20, after: 20 }, // Tuesday Kinder 8–13
+  { day: 2, start: "18:30" }, // Tuesday BJJ
 
   { day: 3, start: "18:00" }, // Wednesday No-Gi
   { day: 3, start: "19:30" }, // Wednesday Gi
 
-  { day: 4, start: "16:45" }, // Thursday Kinder
-  { day: 4, start: "18:00" }, // Thursday No-Gi Sparring
+  { day: 4, start: "16:20", before: 20, after: 20 }, // Thursday Kinder 5–8
+  { day: 4, start: "17:15", before: 20, after: 20 }, // Thursday Kinder 8–13
+  { day: 4, start: "18:30" }, // Thursday Grappling Sparring
 
   { day: 5, start: "18:00" }, // Friday Wrestling
   { day: 5, start: "19:30" }  // Friday Gi Sparring
@@ -68,8 +70,8 @@ function isCheckinWindowOpenNow() {
     if (training.day !== currentDay) return false;
 
     const trainingStart = timeToMinutes(training.start);
-    const checkinOpen = trainingStart - 30;
-    const checkinClose = trainingStart + 30;
+    const checkinOpen = trainingStart - (training.before || 30);
+    const checkinClose = trainingStart + (training.after || 30);
 
     return currentMinutes >= checkinOpen && currentMinutes <= checkinClose;
   });

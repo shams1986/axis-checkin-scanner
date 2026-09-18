@@ -138,6 +138,60 @@ test("static sheet cache lasts six hours and is cleared explicitly", () => {
   assert.equal(schedule.reads.length, 2);
 });
 
+test("Tuesday child and adult check-in windows match the new timetable", () => {
+  const { context } = loadCode();
+  const schedule = [
+    ["Active", "TrainingType", "DisplayName", "DayOfWeek", "StartTime", "Audience"],
+    [true, "Kinder", "Kids 5-8", "Dienstag", "16:20", "Kinder"],
+    [true, "Kinder", "Kids 8-13", "Dienstag", "17:15", "Kinder"],
+    [true, "BJJ", "BJJ", "Dienstag", "18:30", "Erwachsene,Student"]
+  ];
+  const at = (time) => new Date(`2026-09-22T${time}:00`);
+  const children = context.buildTrainingWindowsForToday(schedule, at("16:00"), "Kinder");
+  const adults = context.buildTrainingWindowsForToday(schedule, at("18:00"), "Erwachsene");
+
+  assert.deepEqual(
+    Array.from(children, (training) => [training.checkinOpenText, training.checkinCloseText]),
+    [["16:00", "16:40"], ["16:55", "17:35"]]
+  );
+  assert.notEqual(children[0].trainingKey, children[1].trainingKey);
+  assert.deepEqual(
+    Array.from(adults, (training) => [training.checkinOpenText, training.checkinCloseText]),
+    [["18:00", "19:00"]]
+  );
+
+  for (const time of ["16:00", "16:40", "16:55", "17:35"]) {
+    assert.equal(context.getOpenCheckinTrainingFromData(schedule, at(time), "Kinder").isOpen, true, time);
+  }
+  for (const time of ["15:59", "16:41", "16:54", "17:36", "18:00"]) {
+    assert.equal(context.getOpenCheckinTrainingFromData(schedule, at(time), "Kinder").isOpen, false, time);
+  }
+  assert.equal(context.getNextCheckinTrainingTodayFromData(schedule, at("16:41"), "Kinder").checkinOpenText, "16:55");
+  assert.equal(context.getOpenCheckinTrainingFromData(schedule, at("17:59"), "Erwachsene").isOpen, false);
+  assert.equal(context.getOpenCheckinTrainingFromData(schedule, at("18:00"), "Erwachsene").isOpen, true);
+  assert.equal(context.getOpenCheckinTrainingFromData(schedule, at("19:00"), "Erwachsene").isOpen, true);
+  assert.equal(context.getOpenCheckinTrainingFromData(schedule, at("19:01"), "Erwachsene").isOpen, false);
+});
+
+test("Thursday uses the same child windows and preserves the adult 30-minute rule", () => {
+  const { context } = loadCode();
+  const schedule = [
+    ["Active", "TrainingType", "DisplayName", "DayOfWeek", "StartTime", "Audience"],
+    [true, "Kinder", "Kids 5-8", "Donnerstag", "16:20", "Kinder"],
+    [true, "Kinder", "Kids 8-13", "Donnerstag", "17:15", "Kinder"],
+    [true, "GrapplingSparring", "Grappling Sparring", "Donnerstag", "18:30", "Erwachsene,Student"]
+  ];
+  const now = new Date("2026-09-24T18:00:00");
+
+  assert.deepEqual(
+    Array.from(context.buildTrainingWindowsForToday(schedule, now, "Kinder"),
+      (training) => [training.checkinOpenText, training.checkinCloseText]),
+    [["16:00", "16:40"], ["16:55", "17:35"]]
+  );
+  assert.equal(context.getOpenCheckinTrainingFromData(schedule, now, "Erwachsene").trainingType, "GrapplingSparring");
+  assert.equal(context.getOpenCheckinTrainingFromData(schedule, now, "Kinder").isOpen, false);
+});
+
 test("row index caches only row numbers and always reads current state values", () => {
   const { context } = loadCode();
   const state = new FakeSheet("Checkin_State", [

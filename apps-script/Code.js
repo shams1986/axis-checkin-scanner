@@ -1814,7 +1814,7 @@ function getCurrentTrainingFromData(scheduleData, nowDate) {
  * getOpenCheckinTrainingFromData(scheduleData, nowDate, category)
  *
  * Findet die Trainingseinheit, deren Check-In-Fenster jetzt offen ist.
- * Fenster: 30 Minuten vor Start bis 30 Minuten nach Start.
+ * Kinder: 20 Minuten vor/nach Start. Andere Trainings: 30 Minuten.
  */
 function getOpenCheckinTrainingFromData(scheduleData, nowDate, category) {
 
@@ -1925,6 +1925,7 @@ function buildTrainingWindowsForToday(scheduleData, nowDate, category) {
     const trainingType = row[trainingTypeCol] || "";
     const displayName = row[displayNameCol] || trainingType || "Training";
     const trainingStartText = minutesToTimeText(startMinutes);
+    const checkinOffsetMinutes = String(trainingType).trim() === "Kinder" ? 20 : 30;
 
     result.push({
       isOpen: false,
@@ -1932,10 +1933,10 @@ function buildTrainingWindowsForToday(scheduleData, nowDate, category) {
       displayName: displayName,
       audience: audience,
       startMinutes: startMinutes,
-      checkinOpenMinutes: startMinutes - 30,
-      checkinCloseMinutes: startMinutes + 30,
-      checkinOpenText: minutesToTimeText(startMinutes - 30),
-      checkinCloseText: minutesToTimeText(startMinutes + 30),
+      checkinOpenMinutes: startMinutes - checkinOffsetMinutes,
+      checkinCloseMinutes: startMinutes + checkinOffsetMinutes,
+      checkinOpenText: minutesToTimeText(startMinutes - checkinOffsetMinutes),
+      checkinCloseText: minutesToTimeText(startMinutes + checkinOffsetMinutes),
       trainingStartText: trainingStartText,
       trainingKey: buildTrainingKey(nowDate, trainingType, trainingStartText)
     });
