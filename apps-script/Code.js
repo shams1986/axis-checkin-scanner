@@ -2916,8 +2916,8 @@ function getMessageHeaderForContentKind(vorname, source, contentKind) {
 
   if (source === "welcome" || kind === "welcome") {
     return vorname
-      ? "Willkommen bei AXIS, " + vorname + "!"
-      : "Willkommen bei AXIS!";
+      ? "Willkommen bei AXIS Jiu-Jitsu, " + vorname + "!"
+      : "Willkommen bei AXIS Jiu-Jitsu!";
   }
 
   if (source === "personal" || kind === "personal") {

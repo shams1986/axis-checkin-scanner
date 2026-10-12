@@ -438,7 +438,7 @@ test("first check-in shows the AXIS welcome without consuming personal or rotati
   assert.equal(result.cycleStatus, "welcome");
   assert.equal(
     context.formatCheckinMessage("Amir", result.message, result.source, result.contentKind),
-    "Willkommen bei AXIS, Amir!\nSchön, dass du Teil unseres Teams bist."
+    "Willkommen bei AXIS Jiu-Jitsu, Amir!\nSchön, dass du Teil unseres Teams bist."
   );
   assert.equal(personal.values[1][0], true);
   assert.equal(personal.reads.length, 0);
