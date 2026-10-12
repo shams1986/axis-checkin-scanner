@@ -407,6 +407,44 @@ test("personal ShowOnce remains immediate and bypasses normal content rotation",
   assert.equal(messageState.values.length, 1);
 });
 
+test("first check-in shows the AXIS welcome without consuming personal or rotating content", () => {
+  const { context } = loadCode();
+  const personal = new FakeSheet("Personal_Checkin", [
+    ["Active", "MemberID", "Message", "ShowOnce", "UsedAt"],
+    [true, "AJJ011", "Personal message", true, ""]
+  ]);
+  const content = new FakeSheet("Checkin_Content", [
+    ["Active", "ContentID", "Message"],
+    [true, "C999", "Normal message"]
+  ]);
+  const ss = {
+    getSheetByName(name) {
+      if (name === "Personal_Checkin") return personal;
+      if (name === "Checkin_Content") return content;
+      return null;
+    }
+  };
+
+  const result = context.getFastSmartMessage(
+    ss,
+    { memberId: "AJJ011", vorname: "Amir", category: "Erwachsene", age: 30 },
+    0,
+    { trainingType: "Gi" },
+    true
+  );
+
+  assert.equal(result.source, "welcome");
+  assert.equal(result.contentId, "WELCOME");
+  assert.equal(result.cycleStatus, "welcome");
+  assert.equal(
+    context.formatCheckinMessage("Amir", result.message, result.source, result.contentKind),
+    "Willkommen bei AXIS, Amir!\nSchön, dass du Teil unseres Teams bist."
+  );
+  assert.equal(personal.values[1][0], true);
+  assert.equal(personal.reads.length, 0);
+  assert.equal(content.reads.length, 0);
+});
+
 test("completed content cycle still restarts and updates the same member state", () => {
   const { context } = loadCode();
   const messageState = new FakeSheet("Checkin_Message_State", [

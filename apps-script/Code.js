@@ -507,7 +507,8 @@ function processFastCheckinApi(memberId, diagnosticId) {
     ss,
     member,
     missedTrainingDays,
-    currentTraining
+    currentTraining,
+    !previousAttendanceDate
   );
   timings.smartMessage = Date.now() - phaseStartedAt;
 
@@ -1141,8 +1142,22 @@ function getFastSmartMessage(
   ss,
   member,
   missedTrainingDays,
-  currentTraining
+  currentTraining,
+  isFirstCheckin
 ) {
+
+  // Beim ersten erfolgreichen Check-in erhält jedes neue Mitglied
+  // automatisch dieselbe AXIS-Willkommensnachricht.
+  if (isFirstCheckin) {
+    return {
+      message: "Schön, dass du Teil unseres Teams bist.",
+      contentId: "WELCOME",
+      source: "welcome",
+      contentKind: "welcome",
+      cycleStatus: "welcome",
+      seenSuitableMessages: ""
+    };
+  }
 
   // 1. Сначала персональное сообщение.
   // Personal_Checkin не кэшируем, потому что ShowOnce должен сработать сразу.
@@ -2898,6 +2913,12 @@ function trainingTypeMatchesContent(contentTrainingType, currentTraining, member
 function getMessageHeaderForContentKind(vorname, source, contentKind) {
 
   const kind = normalizeContentKind(contentKind);
+
+  if (source === "welcome" || kind === "welcome") {
+    return vorname
+      ? "Willkommen bei AXIS, " + vorname + "!"
+      : "Willkommen bei AXIS!";
+  }
 
   if (source === "personal" || kind === "personal") {
     return "";
